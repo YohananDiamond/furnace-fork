@@ -9,4 +9,4 @@ if [ -d "$dist" ]; then
   rm -r "$dist"
 fi
 
-PKGDEST="$dist" makepkg -csi
+PKGDEST="$dist" makepkg -si
