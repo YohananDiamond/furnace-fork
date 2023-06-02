@@ -237,6 +237,7 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=/usr \
           -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
           -DWARNINGS_ARE_ERRORS=${USE_WAE} \
+          -DWITH_DEMOS=OFF -DWITH_INSTRUMENTS=OFF -DWITH_WAVETABLES=OFF \
           "${CMAKE_EXTRA_ARGS[@]}"
 
     - name: Build
@@ -311,7 +312,6 @@ jobs:
         rm -r share/licenses
         rm -r share/metainfo
 
-        rmdir share/furnace
         rmdir share
 
         cd ..
@@ -321,9 +321,11 @@ jobs:
         cp -r ../../papers papers
         rmdir usr
 
-        tar -zcv -f ../${{ steps.package-identify.outputs.filename }} furnace
-
         popd
+
+        cd target
+
+        tar -zcv -f ../${{ steps.package-identify.outputs.filename }} furnace
 
     - name: Upload artifact
       if: ${{ github.repository == 'tildearrow/furnace' && github.ref_name == 'master' }}
