@@ -30,7 +30,6 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_sdl.h"
-#include "imgui_impl_sdlrenderer.h"
 #include "ImGuiFileDialog.h"
 #include "IconsFontAwesome4.h"
 #include "misc/cpp/imgui_stdlib.h"
@@ -3537,8 +3536,8 @@ bool FurnaceGUI::loop() {
       }
     }
     // update canvas size as well
-    if (SDL_GetRendererOutputSize(sdlRend,&canvasW,&canvasH)!=0) {
-      logW("loop: error while getting output size! %s",SDL_GetError());
+    if (!rend->getOutputSize(canvasW,canvasH)) {
+      logW("loop: error while getting output size!");
     } else {
       //logV("updateWindow: canvas size %dx%d",canvasW,canvasH);
       // and therefore window size
@@ -3763,7 +3762,7 @@ bool FurnaceGUI::loop() {
 
     layoutTimeBegin=SDL_GetPerformanceCounter();
 
-    if (!ImGui_ImplSDLRenderer_NewFrame()) {
+    if (!rend->newFrame()) {
       fontsFailed=true;
     }
     ImGui_ImplSDL2_NewFrame(sdlWin);
@@ -4418,7 +4417,7 @@ bool FurnaceGUI::loop() {
       portrait=(scrW<scrH);
       logV("portrait: %d (%dx%d)",portrait,scrW,scrH);
 
-      SDL_GetRendererOutputSize(sdlRend,&canvasW,&canvasH);
+      rend->getOutputSize(canvasW,canvasH);
 #endif
       if (patternOpen) nextWindow=GUI_WINDOW_PATTERN;
 #ifdef __APPLE__
@@ -5796,30 +5795,24 @@ bool FurnaceGUI::loop() {
       }
     }
 
-    SDL_SetRenderDrawColor(sdlRend,uiColors[GUI_COLOR_BACKGROUND].x*255,
-                                   uiColors[GUI_COLOR_BACKGROUND].y*255,
-                                   uiColors[GUI_COLOR_BACKGROUND].z*255,
-                                   uiColors[GUI_COLOR_BACKGROUND].w*255);
-    SDL_RenderClear(sdlRend);
+    rend->clear(uiColors[GUI_COLOR_BACKGROUND]);
     renderTimeBegin=SDL_GetPerformanceCounter();
     ImGui::Render();
     renderTimeEnd=SDL_GetPerformanceCounter();
-    ImGui_ImplSDLRenderer_RenderDrawData(ImGui::GetDrawData());
+    rend->renderGUI();
     if (mustClear) {
-      SDL_RenderClear(sdlRend);
+      rend->clear(ImVec4(0,0,0,0));
       mustClear--;
     } else {
       if (initialScreenWipe>0.0f && !settings.disableFadeIn) {
         WAKE_UP;
         initialScreenWipe-=ImGui::GetIO().DeltaTime*5.0f;
         if (initialScreenWipe>0.0f) {
-          SDL_SetRenderDrawBlendMode(sdlRend,SDL_BLENDMODE_BLEND);
-          SDL_SetRenderDrawColor(sdlRend,0,0,0,255*pow(initialScreenWipe,2.0f));
-          SDL_RenderFillRect(sdlRend,NULL);
+          rend->wipe(pow(initialScreenWipe,2.0f));
         }
       }
     }
-    SDL_RenderPresent(sdlRend);
+    rend->present();
 
     layoutTimeDelta=layoutTimeEnd-layoutTimeBegin;
     renderTimeDelta=renderTimeEnd-renderTimeBegin;
@@ -5854,9 +5847,11 @@ bool FurnaceGUI::loop() {
       ImGui::GetIO().Fonts->Clear();
       mainFont=ImGui::GetIO().Fonts->AddFontDefault();
       patFont=mainFont;
-      ImGui_ImplSDLRenderer_DestroyFontsTexture();
+      if (rend) rend->destroyFontsTexture();
       if (!ImGui::GetIO().Fonts->Build()) {
         logE("error again while building font atlas!");
+      } else {
+        rend->createFontsTexture();
       }
     }
 
@@ -6024,7 +6019,14 @@ bool FurnaceGUI::init() {
 #endif
 
   // initialize SDL
-  SDL_Init(SDL_INIT_VIDEO|SDL_INIT_HAPTIC);
+  if (SDL_Init(SDL_INIT_VIDEO)!=0) {
+    logE("could not initialize video! %s",SDL_GetError());
+    return false;
+  }
+
+  if (SDL_Init(SDL_INIT_HAPTIC)!=0) {
+    logW("could not initialize haptic! %s",SDL_GetError());
+  }
 
   const char* videoBackend=SDL_GetCurrentVideoDriver();
   if (videoBackend!=NULL) {
@@ -6125,7 +6127,27 @@ bool FurnaceGUI::init() {
 
   logV("window size: %dx%d",scrW,scrH);
 
-  sdlWin=SDL_CreateWindow("Furnace",scrX,scrY,scrW,scrH,SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI|(scrMax?SDL_WINDOW_MAXIMIZED:0)|(fullScreen?SDL_WINDOW_FULLSCREEN_DESKTOP:0));
+  if (!initRender()) {
+    if (settings.renderBackend=="OpenGL") {
+      settings.renderBackend="";
+      e->setConf("renderBackend","");
+      e->saveConf();
+      lastError=fmt::sprintf("\r\nthe render backend has been set to a safe value. please restart Furnace.");
+    } else {
+      lastError=fmt::sprintf("could not init renderer! %s",SDL_GetError());
+      if (!settings.renderDriver.empty()) {
+        settings.renderDriver="";
+        e->setConf("renderDriver","");
+        e->saveConf();
+        lastError=fmt::sprintf("\r\nthe render driver has been set to a safe value. please restart Furnace.");
+      }
+    }
+    return false;
+  }
+
+  rend->preInit();
+
+  sdlWin=SDL_CreateWindow("Furnace",scrX,scrY,scrW,scrH,SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI|(scrMax?SDL_WINDOW_MAXIMIZED:0)|(fullScreen?SDL_WINDOW_FULLSCREEN_DESKTOP:0)|rend->getWindowFlags());
   if (sdlWin==NULL) {
     lastError=fmt::sprintf("could not open window! %s",SDL_GetError());
     return false;
@@ -6189,22 +6211,27 @@ bool FurnaceGUI::init() {
     SDL_SetHint(SDL_HINT_RENDER_DRIVER,settings.renderDriver.c_str());
   }
 
-  sdlRend=SDL_CreateRenderer(sdlWin,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC|SDL_RENDERER_TARGETTEXTURE);
-
-  if (sdlRend==NULL) {
-    lastError=fmt::sprintf("could not init renderer! %s",SDL_GetError());
-    if (!settings.renderDriver.empty()) {
-      settings.renderDriver="";
-      e->setConf("renderDriver","");
+  if (!rend->init(sdlWin)) {
+    if (settings.renderBackend=="OpenGL") {
+      settings.renderBackend="";
+      e->setConf("renderBackend","");
       e->saveConf();
-      lastError=fmt::sprintf("\r\nthe render driver has been set to a safe value. please restart Furnace.");
+      lastError=fmt::sprintf("\r\nthe render backend has been set to a safe value. please restart Furnace.");
+    } else {
+      lastError=fmt::sprintf("could not init renderer! %s",SDL_GetError());
+      if (!settings.renderDriver.empty()) {
+        settings.renderDriver="";
+        e->setConf("renderDriver","");
+        e->saveConf();
+        lastError=fmt::sprintf("\r\nthe render driver has been set to a safe value. please restart Furnace.");
+      }
     }
     return false;
   }
 
   // try acquiring the canvas size
-  if (SDL_GetRendererOutputSize(sdlRend,&canvasW,&canvasH)!=0) {
-    logW("could not get renderer output size! %s",SDL_GetError());
+  if (!rend->getOutputSize(canvasW,canvasH)) {
+    logW("could not get renderer output size!");
   } else {
     logV("canvas size: %dx%d",canvasW,canvasH);
   }
@@ -6212,15 +6239,16 @@ bool FurnaceGUI::init() {
   // special consideration for Wayland
   if (settings.dpiScale<0.5f) {
     if (strcmp(videoBackend,"wayland")==0) {
-      dpiScale=(double)canvasW/(double)scrW;
+      if (scrW<1) {
+        logW("screen width is zero!\n");
+        dpiScale=1.0;
+      } else {
+        dpiScale=(double)canvasW/(double)scrW;
+      }
     }
   }
 
-  IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
-
-  ImGui_ImplSDL2_InitForSDLRenderer(sdlWin,sdlRend);
-  ImGui_ImplSDLRenderer_Init(sdlRend);
+  rend->initGUI(sdlWin);
 
   applyUISettings();
 
@@ -6230,7 +6258,7 @@ bool FurnaceGUI::init() {
     ImGui::GetIO().Fonts->Clear();
     mainFont=ImGui::GetIO().Fonts->AddFontDefault();
     patFont=mainFont;
-    ImGui_ImplSDLRenderer_DestroyFontsTexture();
+    if (rend) rend->destroyFontsTexture();
     if (!ImGui::GetIO().Fonts->Build()) {
       logE("error again while building font atlas!");
     }
@@ -6448,10 +6476,10 @@ void FurnaceGUI::commitState() {
 
 bool FurnaceGUI::finish() {
   commitState();
-  ImGui_ImplSDLRenderer_Shutdown();
+  rend->quitGUI();
   ImGui_ImplSDL2_Shutdown();
   ImGui::DestroyContext();
-  SDL_DestroyRenderer(sdlRend);
+  quitRender();
   SDL_DestroyWindow(sdlWin);
 
   if (vibrator) {
@@ -6471,8 +6499,9 @@ bool FurnaceGUI::finish() {
 
 FurnaceGUI::FurnaceGUI():
   e(NULL),
+  renderBackend(GUI_BACKEND_SDL),
+  rend(NULL),
   sdlWin(NULL),
-  sdlRend(NULL),
   vibrator(NULL),
   vibratorAvailable(false),
   sampleTex(NULL),

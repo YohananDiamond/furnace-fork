@@ -1278,16 +1278,32 @@ void FurnaceGUI::drawSettings() {
         ImVec2 settingsViewSize=ImGui::GetContentRegionAvail();
         settingsViewSize.y-=ImGui::GetFrameHeight()+ImGui::GetStyle().WindowPadding.y;
         if (ImGui::BeginChild("SettingsView",settingsViewSize)) {
-          if (ImGui::BeginCombo("Render driver",settings.renderDriver.empty()?"Automatic":settings.renderDriver.c_str())) {
-            if (ImGui::Selectable("Automatic",settings.renderDriver.empty())) {
-              settings.renderDriver="";
+          String curRenderBackend=settings.renderBackend.empty()?GUI_BACKEND_DEFAULT_NAME:settings.renderBackend;
+          if (ImGui::BeginCombo("Render backend",curRenderBackend.c_str())) {
+#ifdef HAVE_RENDER_SDL
+            if (ImGui::Selectable("SDL Renderer",curRenderBackend=="SDL")) {
+              settings.renderBackend="SDL";
             }
-            for (String& i: availRenderDrivers) {
-              if (ImGui::Selectable(i.c_str(),i==settings.renderDriver)) {
-                settings.renderDriver=i;
-              }
+#endif
+#ifdef HAVE_RENDER_GL
+            if (ImGui::Selectable("OpenGL",curRenderBackend=="OpenGL")) {
+              settings.renderBackend="OpenGL";
             }
+#endif
             ImGui::EndCombo();
+          }
+          if (curRenderBackend=="SDL") {
+            if (ImGui::BeginCombo("Render driver",settings.renderDriver.empty()?"Automatic":settings.renderDriver.c_str())) {
+              if (ImGui::Selectable("Automatic",settings.renderDriver.empty())) {
+                settings.renderDriver="";
+              }
+              for (String& i: availRenderDrivers) {
+                if (ImGui::Selectable(i.c_str(),i==settings.renderDriver)) {
+                  settings.renderDriver=i;
+                }
+              }
+              ImGui::EndCombo();
+            }
           }
 
           bool dpiScaleAuto=(settings.dpiScale<0.5f);
@@ -2711,6 +2727,7 @@ void FurnaceGUI::syncSettings() {
   settings.orderButtonPos=e->getConfInt("orderButtonPos",2);
   settings.compress=e->getConfInt("compress",1);
   settings.newPatternFormat=e->getConfInt("newPatternFormat",1);
+  settings.renderBackend=e->getConfString("renderBackend","SDL");
 
   clampSetting(settings.mainFontSize,2,96);
   clampSetting(settings.patFontSize,2,96);
@@ -3050,6 +3067,7 @@ void FurnaceGUI::commitSettings() {
   e->setConf("orderButtonPos",settings.orderButtonPos);
   e->setConf("compress",settings.compress);
   e->setConf("newPatternFormat",settings.newPatternFormat);
+  e->setConf("renderBackend",settings.renderBackend);
 
   // colors
   for (int i=0; i<GUI_COLOR_MAX; i++) {
@@ -3089,17 +3107,21 @@ void FurnaceGUI::commitSettings() {
 
   applyUISettings();
 
-  ImGui_ImplSDLRenderer_DestroyFontsTexture();
+  if (rend) rend->destroyFontsTexture();
   if (!ImGui::GetIO().Fonts->Build()) {
     logE("error while building font atlas!");
     showError("error while loading fonts! please check your settings.");
     ImGui::GetIO().Fonts->Clear();
     mainFont=ImGui::GetIO().Fonts->AddFontDefault();
     patFont=mainFont;
-    ImGui_ImplSDLRenderer_DestroyFontsTexture();
+    if (rend) rend->destroyFontsTexture();
     if (!ImGui::GetIO().Fonts->Build()) {
       logE("error again while building font atlas!");
+    } else {
+      rend->createFontsTexture();
     }
+  } else {
+    rend->createFontsTexture();
   }
 }
 
