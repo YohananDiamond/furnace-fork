@@ -543,6 +543,16 @@ void FurnaceGUI::drawSettings() {
             settings.stepOnDelete=stepOnDeleteB;
           }
 
+          bool insertBehaviorB=settings.insertBehavior;
+          if (ImGui::Checkbox("Insert pushes entire channel row",&insertBehaviorB)) {
+            settings.insertBehavior=insertBehaviorB;
+          }
+
+          bool pullDeleteRowB=settings.pullDeleteRow;
+          if (ImGui::Checkbox("Pull delete affects entire channel row",&pullDeleteRowB)) {
+            settings.pullDeleteRow=pullDeleteRowB;
+          }
+
           bool absorbInsInputB=settings.absorbInsInput;
           if (ImGui::Checkbox("Change current instrument when changing instrument column (absorb)",&absorbInsInputB)) {
             settings.absorbInsInput=absorbInsInputB;
@@ -624,6 +634,14 @@ void FurnaceGUI::drawSettings() {
           }
           if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("saves power by lowering the frame rate to 2fps when idle.\nmay cause issues under Mesa drivers!");
+          }
+
+          bool renderClearPosB=settings.renderClearPos;
+          if (ImGui::Checkbox("Late render clear",&renderClearPosB)) {
+            settings.renderClearPos=renderClearPosB;
+          }
+          if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("calls rend->clear() after rend->present(). might reduce UI latency by one frame in some drivers.");
           }
 
 #ifndef IS_MOBILE
@@ -2728,6 +2746,9 @@ void FurnaceGUI::syncSettings() {
   settings.compress=e->getConfInt("compress",1);
   settings.newPatternFormat=e->getConfInt("newPatternFormat",1);
   settings.renderBackend=e->getConfString("renderBackend","SDL");
+  settings.renderClearPos=e->getConfInt("renderClearPos",0);
+  settings.insertBehavior=e->getConfInt("insertBehavior",1);
+  settings.pullDeleteRow=e->getConfInt("pullDeleteRow",1);
 
   clampSetting(settings.mainFontSize,2,96);
   clampSetting(settings.patFontSize,2,96);
@@ -2850,6 +2871,9 @@ void FurnaceGUI::syncSettings() {
   clampSetting(settings.orderButtonPos,0,2);
   clampSetting(settings.compress,0,1);
   clampSetting(settings.newPatternFormat,0,1);
+  clampSetting(settings.renderClearPos,0,1);
+  clampSetting(settings.insertBehavior,0,1);
+  clampSetting(settings.pullDeleteRow,0,1);
 
   if (settings.exportLoops<0.0) settings.exportLoops=0.0;
   if (settings.exportFadeOut<0.0) settings.exportFadeOut=0.0;
@@ -3068,6 +3092,9 @@ void FurnaceGUI::commitSettings() {
   e->setConf("compress",settings.compress);
   e->setConf("newPatternFormat",settings.newPatternFormat);
   e->setConf("renderBackend",settings.renderBackend);
+  e->setConf("renderClearPos",settings.renderClearPos);
+  e->setConf("insertBehavior",settings.insertBehavior);
+  e->setConf("pullDeleteRow",settings.pullDeleteRow);
 
   // colors
   for (int i=0; i<GUI_COLOR_MAX; i++) {
@@ -3827,7 +3854,8 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
     }
 
     mainFont->FallbackChar='?';
-    mainFont->DotChar='.';
+    mainFont->EllipsisChar='.';
+    mainFont->EllipsisCharCount=3;
   }
 
   // TODO: allow changing these colors.

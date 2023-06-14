@@ -158,9 +158,11 @@ void FurnaceGUI::drawSampleEdit() {
       ImGui::Text("Name");
       ImGui::SameLine();
       ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+      ImGui::PushID(2+curSample);
       if (ImGui::InputText("##SampleName",&sample->name)) {
         MARK_MODIFIED;
       }
+      ImGui::PopID();
 
       ImGui::Separator();
 
@@ -289,6 +291,19 @@ void FurnaceGUI::drawSampleEdit() {
               } else {
                 ImGui::SetTooltip("enable this option to slightly boost high frequencies\nto compensate for the SNES' Gaussian filter's muffle.");
               }
+            }
+          }
+          if (sample->depth!=DIV_SAMPLE_DEPTH_8BIT && e->getSampleFormatMask()&(1L<<DIV_SAMPLE_DEPTH_8BIT)) {
+            bool di=sample->dither;
+            if (ImGui::Checkbox("8-bit dither",&di)) {
+              sample->prepareUndo(true);
+              sample->dither=di;
+              e->renderSamplesP();
+              updateSampleTex=true;
+              MARK_MODIFIED;
+            }
+            if (ImGui::IsItemHovered()) {
+              ImGui::SetTooltip("dither the sample when used on a chip that only supports 8-bit samples.");
             }
           }
 

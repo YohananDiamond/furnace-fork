@@ -29,7 +29,6 @@
 #include "../fileutils.h"
 #include "imgui.h"
 #include "imgui_internal.h"
-#include "imgui_impl_sdl.h"
 #include "ImGuiFileDialog.h"
 #include "IconsFontAwesome4.h"
 #include "misc/cpp/imgui_stdlib.h"
@@ -2951,6 +2950,12 @@ int _processEvent(void* instance, SDL_Event* event) {
   return ((FurnaceGUI*)instance)->processEvent(event);
 }
 
+#if SDL_VERSION_ATLEAST(2,0,17)
+#define VALID_MODS KMOD_NUM|KMOD_CAPS|KMOD_SCROLL
+#else
+#define VALID_MODS KMOD_NUM|KMOD_CAPS
+#endif
+
 int FurnaceGUI::processEvent(SDL_Event* ev) {
   if (introPos<11.0 && !shortIntro) return 1;
 #ifdef IS_MOBILE
@@ -2962,7 +2967,7 @@ int FurnaceGUI::processEvent(SDL_Event* ev) {
   }
 #endif
   if (ev->type==SDL_KEYDOWN) {
-    if (!ev->key.repeat && latchTarget==0 && !wantCaptureKeyboard && !sampleMapWaitingInput && (ev->key.keysym.mod&(~(KMOD_NUM|KMOD_CAPS|KMOD_SCROLL)))==0) {
+    if (!ev->key.repeat && latchTarget==0 && !wantCaptureKeyboard && !sampleMapWaitingInput && (ev->key.keysym.mod&(~(VALID_MODS)))==0) {
       if (settings.notePreviewBehavior==0) return 1;
       switch (curWindow) {
         case GUI_WINDOW_SAMPLE_EDIT:
@@ -3449,6 +3454,7 @@ bool FurnaceGUI::loop() {
               break;
           }
           break;
+#if SDL_VERSION_ATLEAST(2,0,17)
         case SDL_DISPLAYEVENT: {
           switch (ev.display.event) {
             case SDL_DISPLAYEVENT_CONNECTED:
@@ -3466,6 +3472,7 @@ bool FurnaceGUI::loop() {
           }
           break;
         }
+#endif
         case SDL_KEYDOWN:
           if (!ImGui::GetIO().WantCaptureKeyboard) {
             keyDown(ev);
@@ -3482,7 +3489,7 @@ bool FurnaceGUI::loop() {
             int sampleCountBefore=e->song.sampleLen;
             std::vector<DivInstrument*> instruments=e->instrumentFromFile(ev.drop.file);
             DivWavetable* droppedWave=NULL;
-            DivSample* droppedSample=NULL;;
+            DivSample* droppedSample=NULL;
             if (!instruments.empty()) {
               if (e->song.sampleLen!=sampleCountBefore) {
                 e->renderSamplesP();
@@ -3528,7 +3535,8 @@ bool FurnaceGUI::loop() {
     // update config x/y/w/h values based on scrMax state
     if (updateWindow) {
       logV("updateWindow is true");
-      if (!scrMax) {
+      if (!scrMax && !fullScreen) {
+        logV("updating scrConf");
         scrConfX=scrX;
         scrConfY=scrY;
         scrConfW=scrW;
@@ -4346,6 +4354,7 @@ bool FurnaceGUI::loop() {
       MEASURE(log,drawLog());
       MEASURE(compatFlags,drawCompatFlags());
       MEASURE(stats,drawStats());
+      MEASURE(chanOsc,drawChanOsc());
     } else {
       globalWinFlags=0;
       ImGui::DockSpaceOverViewport(NULL,lockLayout?(ImGuiDockNodeFlags_NoWindowMenuButton|ImGuiDockNodeFlags_NoMove|ImGuiDockNodeFlags_NoResize|ImGuiDockNodeFlags_NoCloseButton|ImGuiDockNodeFlags_NoDocking|ImGuiDockNodeFlags_NoDockingSplitMe|ImGuiDockNodeFlags_NoDockingSplitOther):0);
@@ -5795,10 +5804,13 @@ bool FurnaceGUI::loop() {
       }
     }
 
-    rend->clear(uiColors[GUI_COLOR_BACKGROUND]);
+    if (!settings.renderClearPos) {
+      rend->clear(uiColors[GUI_COLOR_BACKGROUND]);
+    }
     renderTimeBegin=SDL_GetPerformanceCounter();
     ImGui::Render();
     renderTimeEnd=SDL_GetPerformanceCounter();
+    drawTimeBegin=SDL_GetPerformanceCounter();
     rend->renderGUI();
     if (mustClear) {
       rend->clear(ImVec4(0,0,0,0));
@@ -5813,9 +5825,14 @@ bool FurnaceGUI::loop() {
       }
     }
     rend->present();
+    drawTimeEnd=SDL_GetPerformanceCounter();
+    if (settings.renderClearPos) {
+      rend->clear(uiColors[GUI_COLOR_BACKGROUND]);
+    }
 
     layoutTimeDelta=layoutTimeEnd-layoutTimeBegin;
     renderTimeDelta=renderTimeEnd-renderTimeBegin;
+    drawTimeDelta=drawTimeEnd-drawTimeBegin;
     eventTimeDelta=eventTimeEnd-eventTimeBegin;
 
     soloTimeout-=ImGui::GetIO().DeltaTime;
@@ -6010,7 +6027,9 @@ bool FurnaceGUI::init() {
   e->setAutoNotePoly(noteInputPoly);
 
   SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER,"1");
+#if SDL_VERSION_ATLEAST(2,0,17)
   SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS,"0");
+#endif
   SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS,"0");
   // don't disable compositing on KWin
 #if SDL_VERSION_ATLEAST(2,0,22)
@@ -6019,14 +6038,18 @@ bool FurnaceGUI::init() {
 #endif
 
   // initialize SDL
+  logD("initializing video...");
   if (SDL_Init(SDL_INIT_VIDEO)!=0) {
     logE("could not initialize video! %s",SDL_GetError());
     return false;
   }
 
+#ifdef IS_MOBILE
+  logD("initializing haptic...");
   if (SDL_Init(SDL_INIT_HAPTIC)!=0) {
     logW("could not initialize haptic! %s",SDL_GetError());
   }
+#endif
 
   const char* videoBackend=SDL_GetCurrentVideoDriver();
   if (videoBackend!=NULL) {
@@ -6147,6 +6170,7 @@ bool FurnaceGUI::init() {
 
   rend->preInit();
 
+  logD("creating window...");
   sdlWin=SDL_CreateWindow("Furnace",scrX,scrY,scrW,scrH,SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI|(scrMax?SDL_WINDOW_MAXIMIZED:0)|(fullScreen?SDL_WINDOW_FULLSCREEN_DESKTOP:0)|rend->getWindowFlags());
   if (sdlWin==NULL) {
     lastError=fmt::sprintf("could not open window! %s",SDL_GetError());
@@ -6211,6 +6235,7 @@ bool FurnaceGUI::init() {
     SDL_SetHint(SDL_HINT_RENDER_DRIVER,settings.renderDriver.c_str());
   }
 
+  logD("starting render backend...");
   if (!rend->init(sdlWin)) {
     if (settings.renderBackend=="OpenGL") {
       settings.renderBackend="";
@@ -6239,19 +6264,32 @@ bool FurnaceGUI::init() {
   // special consideration for Wayland
   if (settings.dpiScale<0.5f) {
     if (strcmp(videoBackend,"wayland")==0) {
-      if (scrW<1) {
+      int realW=scrW;
+      int realH=scrH;
+
+      SDL_GetWindowSize(sdlWin,&realW,&realH);
+
+      if (realW<1) {
         logW("screen width is zero!\n");
         dpiScale=1.0;
       } else {
-        dpiScale=(double)canvasW/(double)scrW;
+        dpiScale=(double)canvasW/(double)realW;
+        logV("we're on Wayland... scaling factor: %f",dpiScale);
       }
     }
   }
 
+  updateWindowTitle();
+
+  rend->clear(ImVec4(0.0,0.0,0.0,1.0));
+  rend->present();
+
+  logD("preparing user interface...");
   rend->initGUI(sdlWin);
 
   applyUISettings();
 
+  logD("building font...");
   if (!ImGui::GetIO().Fonts->Build()) {
     logE("error while building font atlas!");
     showError("error while loading fonts! please check your settings.");
@@ -6264,6 +6302,7 @@ bool FurnaceGUI::init() {
     }
   }
 
+  logD("preparing layout...");
   strncpy(finalLayoutPath,(e->getConfigPath()+String(LAYOUT_INI)).c_str(),4095);
   backupPath=e->getConfigPath();
   if (backupPath.size()>0) {
@@ -6274,8 +6313,6 @@ bool FurnaceGUI::init() {
 
   ImGui::GetIO().ConfigFlags|=ImGuiConfigFlags_DockingEnable;
   toggleMobileUI(mobileUI,true);
-
-  updateWindowTitle();
 
   for (int i=0; i<DIV_MAX_CHANS; i++) {
     oldPat[i]=new DivPattern;
@@ -6323,6 +6360,7 @@ bool FurnaceGUI::init() {
     return curIns;
   });
 
+#ifdef IS_MOBILE
   vibrator=SDL_HapticOpen(0);
   if (vibrator==NULL) {
     logD("could not open vibration device: %s",SDL_GetError());
@@ -6333,7 +6371,9 @@ bool FurnaceGUI::init() {
       logD("vibration not available: %s",SDL_GetError());
     }
   }
+#endif
 
+  logI("done!");
   return true;
 }
 
@@ -6804,6 +6844,9 @@ FurnaceGUI::FurnaceGUI():
   renderTimeBegin(0),
   renderTimeEnd(0),
   renderTimeDelta(0),
+  drawTimeBegin(0),
+  drawTimeEnd(0),
+  drawTimeDelta(0),
   eventTimeBegin(0),
   eventTimeEnd(0),
   eventTimeDelta(0),
@@ -6927,6 +6970,7 @@ FurnaceGUI::FurnaceGUI():
   mustClear(2),
   initialScreenWipe(1.0f),
   introSkipDo(false),
+  introStopped(false),
   curTutorial(-1),
   curTutorialStep(0) {
   // value keys

@@ -23,7 +23,7 @@
 #include "../engine/engine.h"
 #include "../engine/waveSynth.h"
 #include "imgui.h"
-#include "imgui_impl_sdl.h"
+#include "imgui_impl_sdl2.h"
 #include <SDL.h>
 #include <fftw3.h>
 #include <deque>
@@ -1496,6 +1496,9 @@ class FurnaceGUI {
     int orderButtonPos;
     int compress;
     int newPatternFormat;
+    int renderClearPos;
+    int insertBehavior;
+    int pullDeleteRow;
     unsigned int maxUndoSteps;
     String mainFontPath;
     String patFontPath;
@@ -1644,6 +1647,9 @@ class FurnaceGUI {
       orderButtonPos(2),
       compress(1),
       newPatternFormat(1),
+      renderClearPos(0),
+      insertBehavior(1),
+      pullDeleteRow(1),
       maxUndoSteps(100),
       mainFontPath(""),
       patFontPath(""),
@@ -1859,6 +1865,7 @@ class FurnaceGUI {
 
   int layoutTimeBegin, layoutTimeEnd, layoutTimeDelta;
   int renderTimeBegin, renderTimeEnd, renderTimeDelta;
+  int drawTimeBegin, drawTimeEnd, drawTimeDelta;
   int eventTimeBegin, eventTimeEnd, eventTimeDelta;
 
   FurnaceGUIPerfMetric perfMetrics[64];
@@ -2025,7 +2032,7 @@ class FurnaceGUI {
   double monitorPos;
   int mustClear;
   float initialScreenWipe;
-  bool introSkipDo;
+  bool introSkipDo, introStopped;
   ImVec2 introMin, introMax;
 
   // tutorial

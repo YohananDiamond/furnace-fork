@@ -114,6 +114,13 @@ else()
   set(SYSTEM_SDL_MIN_VER 2.0.0)
 endif()
 
+if (WIN32)
+  # support Windows XP
+  if (SUPPORT_XP)
+    add_compile_definitions("_WIN32_WINNT=0x0501")
+  endif()
+endif()
+
 list(APPEND DEPENDENCIES_INCLUDE_DIRS "extern/SAASound/include")
 list(APPEND DEPENDENCIES_INCLUDE_DIRS "extern/vgsound_emu-modified")
 
@@ -602,7 +609,7 @@ extern/imgui_patched/imgui.cpp
 extern/imgui_patched/imgui_draw.cpp
 extern/imgui_patched/imgui_tables.cpp
 extern/imgui_patched/imgui_widgets.cpp
-extern/imgui_patched/backends/imgui_impl_sdl.cpp
+extern/imgui_patched/backends/imgui_impl_sdl2.cpp
 extern/imgui_patched/misc/cpp/imgui_stdlib.cpp
 extern/igfd/ImGuiFileDialog.cpp
 
@@ -610,7 +617,6 @@ src/gui/plot_nolerp.cpp
 
 src/gui/render.cpp
 src/gui/render/abstract.cpp
-src/gui/render/renderSDL.cpp
 
 src/gui/font_exo.cpp
 src/gui/font_liberationSans.cpp
@@ -702,7 +708,7 @@ endif()
 
 if (WITH_RENDER_SDL)
   list(APPEND GUI_SOURCES src/gui/render/renderSDL.cpp)
-  list(APPEND GUI_SOURCES extern/imgui_patched/backends/imgui_impl_sdlrenderer.cpp)
+  list(APPEND GUI_SOURCES extern/imgui_patched/backends/imgui_impl_sdlrenderer2.cpp)
   list(APPEND DEPENDENCIES_DEFINES HAVE_RENDER_SDL)
   message(STATUS "UI render backend: SDL_Renderer")
 endif()
@@ -796,10 +802,6 @@ if (WIN32)
   if (NOT MSVC)
     list(APPEND DEPENDENCIES_LIBRARIES -static)
   endif()
-  # support Windows XP
-  if (SUPPORT_XP)
-    list(APPEND DEPENDENCIES_DEFINES "_WIN32_WINNT=0x0501")
-  endif()
 elseif (APPLE)
   find_library(COCOA Cocoa REQUIRED)
   list(APPEND DEPENDENCIES_LIBRARIES ${COCOA})
@@ -873,7 +875,8 @@ if (NOT ANDROID OR TERMUX)
     install(TARGETS furnace RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     install(FILES res/furnace.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
     install(FILES res/furnace.appdata.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
-    install(DIRECTORY papers DESTINATION ${CMAKE_INSTALL_DOCDIR})
+    install(DIRECTORY doc DESTINATION ${CMAKE_INSTALL_DOCDIR})
+    install(DIRECTORY papers DESTINATION ${CMAKE_INSTALL_DOCDIR}/other)
     install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/furnace)
     if (WITH_DEMOS)
       install(DIRECTORY demos DESTINATION ${CMAKE_INSTALL_DATADIR}/furnace)

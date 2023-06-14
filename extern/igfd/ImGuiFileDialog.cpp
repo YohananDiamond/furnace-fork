@@ -25,6 +25,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+#ifndef IMGUI_DEFINE_MATH_OPERATORS
+	#define IMGUI_DEFINE_MATH_OPERATORS
+#endif // IMGUI_DEFINE_MATH_OPERATORS
+
 #include "ImGuiFileDialog.h"
 #include "../../src/ta-log.h"
 
@@ -71,9 +75,6 @@ SOFTWARE.
 #endif // defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__APPLE__)
 
 #include "imgui.h"
-#ifndef IMGUI_DEFINE_MATH_OPERATORS
-	#define IMGUI_DEFINE_MATH_OPERATORS
-#endif // IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui_internal.h"
 #include <IconsFontAwesome4.h>
 
@@ -1188,10 +1189,9 @@ namespace IGFD
 	IGFD::FileManager::FileManager()
 	{
 		puFsRoot = std::string(1u, PATH_SEP);
-    puSortingDirection[0]=false;
-    puSortingDirection[1]=false;
-    puSortingDirection[2]=false;
-    puSortingDirection[3]=false;
+                for (int i=0; i<4; i++) {
+                  puSortingDirection[i]=true;
+                }
 	}
 
 	void IGFD::FileManager::OpenCurrentPath(const FileDialogInternal& vFileDialogInternal)
@@ -1232,7 +1232,7 @@ namespace IGFD
       logV("IGFD: sorting by name");
 			if (vCanChangeOrder && puSortingField == vSortingField) {
         //printf("Change the sorting\n");
-				puSortingDirection[0] = true;//!puSortingDirection[0];
+				puSortingDirection[0] = !puSortingDirection[0];
       }
 
 			if (puSortingDirection[0])
