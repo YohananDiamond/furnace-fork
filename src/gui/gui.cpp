@@ -3420,6 +3420,7 @@ bool FurnaceGUI::loop() {
               logV("portrait: %d (%dx%d)",portrait,scrW,scrH);
               logD("window resized to %dx%d",scrW,scrH);
               updateWindow=true;
+              rend->resized(ev);
               break;
             case SDL_WINDOWEVENT_MOVED:
               scrX=ev.window.data1;
@@ -5824,8 +5825,8 @@ bool FurnaceGUI::loop() {
         }
       }
     }
-    rend->present();
     drawTimeEnd=SDL_GetPerformanceCounter();
+    rend->present();
     if (settings.renderClearPos) {
       rend->clear(uiColors[GUI_COLOR_BACKGROUND]);
     }
@@ -5995,13 +5996,22 @@ bool FurnaceGUI::init() {
   chanOscCols=e->getConfInt("chanOscCols",3);
   chanOscColorX=e->getConfInt("chanOscColorX",GUI_OSCREF_CENTER);
   chanOscColorY=e->getConfInt("chanOscColorY",GUI_OSCREF_CENTER);
+  chanOscTextX=e->getConfFloat("chanOscTextX",0.0f);
+  chanOscTextY=e->getConfFloat("chanOscTextY",0.0f);
+  chanOscAmplify=e->getConfFloat("chanOscAmplify",0.95f);
   chanOscWindowSize=e->getConfFloat("chanOscWindowSize",20.0f);
   chanOscWaveCorr=e->getConfBool("chanOscWaveCorr",true);
   chanOscOptions=e->getConfBool("chanOscOptions",false);
+  chanOscNormalize=e->getConfBool("chanOscNormalize",false);
+  chanOscTextFormat=e->getConfString("chanOscTextFormat","%c");
   chanOscColor.x=e->getConfFloat("chanOscColorR",1.0f);
   chanOscColor.y=e->getConfFloat("chanOscColorG",1.0f);
   chanOscColor.z=e->getConfFloat("chanOscColorB",1.0f);
   chanOscColor.w=e->getConfFloat("chanOscColorA",1.0f);
+  chanOscTextColor.x=e->getConfFloat("chanOscTextColorR",1.0f);
+  chanOscTextColor.y=e->getConfFloat("chanOscTextColorG",1.0f);
+  chanOscTextColor.z=e->getConfFloat("chanOscTextColorB",1.0f);
+  chanOscTextColor.w=e->getConfFloat("chanOscTextColorA",0.75f);
   chanOscUseGrad=e->getConfBool("chanOscUseGrad",false);
   chanOscGrad.fromString(e->getConfString("chanOscGrad",""));
   chanOscGrad.render();
@@ -6151,7 +6161,7 @@ bool FurnaceGUI::init() {
   logV("window size: %dx%d",scrW,scrH);
 
   if (!initRender()) {
-    if (settings.renderBackend=="OpenGL") {
+    if (settings.renderBackend!="SDL" && !settings.renderBackend.empty()) {
       settings.renderBackend="";
       e->setConf("renderBackend","");
       e->saveConf();
@@ -6237,11 +6247,11 @@ bool FurnaceGUI::init() {
 
   logD("starting render backend...");
   if (!rend->init(sdlWin)) {
-    if (settings.renderBackend=="OpenGL") {
+    if (settings.renderBackend!="SDL" && !settings.renderBackend.empty()) {
       settings.renderBackend="";
-      e->setConf("renderBackend","");
-      e->saveConf();
-      lastError=fmt::sprintf("\r\nthe render backend has been set to a safe value. please restart Furnace.");
+      //e->setConf("renderBackend","");
+      //e->saveConf();
+      //lastError=fmt::sprintf("\r\nthe render backend has been set to a safe value. please restart Furnace.");
     } else {
       lastError=fmt::sprintf("could not init renderer! %s",SDL_GetError());
       if (!settings.renderDriver.empty()) {
@@ -6493,13 +6503,22 @@ void FurnaceGUI::commitState() {
   e->setConf("chanOscCols",chanOscCols);
   e->setConf("chanOscColorX",chanOscColorX);
   e->setConf("chanOscColorY",chanOscColorY);
+  e->setConf("chanOscTextX",chanOscTextX);
+  e->setConf("chanOscTextY",chanOscTextY);
+  e->setConf("chanOscAmplify",chanOscAmplify);
   e->setConf("chanOscWindowSize",chanOscWindowSize);
   e->setConf("chanOscWaveCorr",chanOscWaveCorr);
   e->setConf("chanOscOptions",chanOscOptions);
+  e->setConf("chanOscNormalize",chanOscNormalize);
+  e->setConf("chanOscTextFormat",chanOscTextFormat);
   e->setConf("chanOscColorR",chanOscColor.x);
   e->setConf("chanOscColorG",chanOscColor.y);
   e->setConf("chanOscColorB",chanOscColor.z);
   e->setConf("chanOscColorA",chanOscColor.w);
+  e->setConf("chanOscTextColorR",chanOscTextColor.x);
+  e->setConf("chanOscTextColorG",chanOscTextColor.y);
+  e->setConf("chanOscTextColorB",chanOscTextColor.z);
+  e->setConf("chanOscTextColorA",chanOscTextColor.w);
   e->setConf("chanOscUseGrad",chanOscUseGrad);
   e->setConf("chanOscGrad",chanOscGrad.toString());
 
@@ -6921,11 +6940,17 @@ FurnaceGUI::FurnaceGUI():
   chanOscColorX(GUI_OSCREF_CENTER),
   chanOscColorY(GUI_OSCREF_CENTER),
   chanOscWindowSize(20.0f),
+  chanOscTextX(0.0f),
+  chanOscTextY(0.0f),
+  chanOscAmplify(0.95f),
   chanOscWaveCorr(true),
   chanOscOptions(false),
   updateChanOscGradTex(true),
   chanOscUseGrad(false),
+  chanOscNormalize(false),
+  chanOscTextFormat("%c"),
   chanOscColor(1.0f,1.0f,1.0f,1.0f),
+  chanOscTextColor(1.0f,1.0f,1.0f,0.75f),
   chanOscGrad(64,64),
   chanOscGradTex(NULL),
   followLog(true),
