@@ -18,6 +18,7 @@
  */
 
 #include "gui.h"
+#include "commandPalette.h"
 #include "../ta-log.h"
 #include <fmt/printf.h>
 #include <imgui.h>
@@ -184,7 +185,12 @@ void FurnaceGUI::doAction(int what) {
     case GUI_ACTION_CLEAR:
       showWarning("Are you sure you want to clear... (cannot be undone!)",GUI_WARN_CLEAR);
       break;
-
+    case GUI_ACTION_COMMAND_PALETTE:
+      displayPalette=true;
+      break;
+    case GUI_ACTION_CMDPAL_RECENT:
+      curPaletteType=CMDPAL_TYPE_RECENT;
+      break;
     case GUI_ACTION_WINDOW_EDIT_CONTROLS:
       nextWindow=GUI_WINDOW_EDIT_CONTROLS;
       break;

@@ -2158,6 +2158,17 @@ int FurnaceGUI::load(String path) {
   return 0;
 }
 
+void FurnaceGUI::openRecentFile(String path) {
+  if (modified) {
+    nextFile=path;
+    showWarning("Unsaved changes! Save changes before opening file?",GUI_WARN_OPEN_DROP);
+  } else {
+    if (load(path)>0) {
+      showError(fmt::sprintf("Error while loading file! (%s)",lastError));
+    }
+  }
+}
+
 void FurnaceGUI::pushRecentFile(String path) {
   if (path.empty()) return;
   if (path.find(backupPath)==0) return;
@@ -3887,17 +3898,13 @@ bool FurnaceGUI::loop() {
           exitDisabledTimer=1;
           for (int i=0; i<(int)recentFile.size(); i++) {
             String item=recentFile[i];
-            if (ImGui::MenuItem(item.c_str())) {
-              if (modified) {
-                nextFile=item;
-                showWarning("Unsaved changes! Save changes before opening file?",GUI_WARN_OPEN_DROP);
-              } else {
+            if (ImGui::MenuItem(recentFile[i].c_str())) {
+              String item=recentFile[i];
+              if (!modified) {
                 recentFile.erase(recentFile.begin()+i);
                 i--;
-                if (load(item)>0) {
-                  showError(fmt::sprintf("Error while loading file! (%s)",lastError));
-                }
               }
+              openRecentFile(item);
             }
           }
           if (recentFile.empty()) {
@@ -4241,6 +4248,8 @@ bool FurnaceGUI::loop() {
         ImGui::EndMenu();
       }
       if (ImGui::BeginMenu("window")) {
+        if (ImGui::MenuItem("command palette",BIND_FOR(GUI_ACTION_COMMAND_PALETTE)))
+          displayPalette=true;
         if (ImGui::MenuItem("song information",BIND_FOR(GUI_ACTION_WINDOW_SONG_INFO),songInfoOpen)) songInfoOpen=!songInfoOpen;
         if (ImGui::MenuItem("subsongs",BIND_FOR(GUI_ACTION_WINDOW_SUBSONGS),subSongsOpen)) subSongsOpen=!subSongsOpen;
         if (ImGui::MenuItem("speed",BIND_FOR(GUI_ACTION_WINDOW_SPEED),speedOpen)) speedOpen=!speedOpen;
@@ -5181,6 +5190,15 @@ bool FurnaceGUI::loop() {
       }
     }
 
+    if (displayPalette) {
+      paletteQuery="";
+      paletteFirstFrame=true;
+      curPaletteChoice=0;
+      curPaletteType=0;
+      displayPalette=false;
+      ImGui::OpenPopup("Command Palette");
+    }
+
     if (displayEditString) {
       ImGui::OpenPopup("EditString");
     }
@@ -5217,6 +5235,14 @@ bool FurnaceGUI::loop() {
         ImGui::SetWindowSize(newSongMinSize,ImGuiCond_Always);
       }
       drawNewSong();
+      ImGui::EndPopup();
+    }
+
+    if (ImGui::BeginPopupModal("Command Palette",NULL,ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoSavedSettings)) {
+      ImVec2 wsize=ImVec2(canvasW*0.9,canvasH*0.4);
+      ImGui::SetWindowPos(ImVec2((canvasW-wsize.x)*0.5,50*dpiScale));
+      ImGui::SetWindowSize(wsize,ImGuiCond_Always);
+      drawPalette();
       ImGui::EndPopup();
     }
 
@@ -6691,6 +6717,7 @@ FurnaceGUI::FurnaceGUI():
   oldWantCaptureKeyboard(false),
   displayMacroMenu(false),
   displayNew(false),
+  displayPalette(false),
   fullScreen(false),
   preserveChanPos(false),
   wantScrollList(false),
@@ -6788,6 +6815,8 @@ FurnaceGUI::FurnaceGUI():
   oldBar(-1),
   curGroove(-1),
   exitDisabledTimer(0),
+  curPaletteChoice(0),
+  curPaletteType(0),
   soloTimeout(0.0f),
   exportFadeOut(5.0),
   editControlsOpen(true),
