@@ -54,8 +54,8 @@
 #define EXTERN_BUSY_BEGIN_SOFT e->softLocked=true; e->isBusy.lock();
 #define EXTERN_BUSY_END e->isBusy.unlock(); e->softLocked=false;
 
-#define DIV_VERSION "dev159"
-#define DIV_ENGINE_VERSION 159
+#define DIV_VERSION "0.6pre6"
+#define DIV_ENGINE_VERSION 161
 // for imports
 #define DIV_VERSION_MOD 0xff01
 #define DIV_VERSION_FC 0xff02
@@ -570,6 +570,7 @@ class DivEngine {
     float oscSize;
     int oscReadPos, oscWritePos;
     int tickMult;
+    int lastNBIns, lastNBOuts, lastNBSize;
     std::atomic<size_t> processTime;
 
     void runExportThread();
@@ -1252,6 +1253,9 @@ class DivEngine {
       oscReadPos(0),
       oscWritePos(0),
       tickMult(1),
+      lastNBIns(0),
+      lastNBOuts(0),
+      lastNBSize(0),
       processTime(0),
       yrw801ROM(NULL),
       tg100ROM(NULL),

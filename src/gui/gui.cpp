@@ -6357,6 +6357,19 @@ bool FurnaceGUI::init() {
   }
 #endif
 
+  int numDriversA=SDL_GetNumAudioDrivers();
+  if (numDriversA<0) {
+    logW("could not list audio drivers! %s",SDL_GetError());
+  } else {
+    for (int i=0; i<numDriversA; i++) {
+      const char* r=SDL_GetAudioDriver(i);
+      if (r==NULL) continue;
+      if (strcmp(r,"disk")==0) continue;
+      if (strcmp(r,"dummy")==0) continue;
+      availAudioDrivers.push_back(String(r));
+    }
+  }
+
   int numDrivers=SDL_GetNumRenderDrivers();
   if (numDrivers<0) {
     logW("could not list render drivers! %s",SDL_GetError());
@@ -6375,8 +6388,8 @@ bool FurnaceGUI::init() {
 
   logD("starting render backend...");
   if (!rend->init(sdlWin)) {
-    if (settings.renderBackend!="SDL" && !settings.renderBackend.empty()) {
-      settings.renderBackend="";
+    if (settings.renderBackend!="SDL") {
+      settings.renderBackend="SDL";
       //e->setConf("renderBackend","");
       //e->saveConf();
       //lastError=fmt::sprintf("\r\nthe render backend has been set to a safe value. please restart Furnace.");
