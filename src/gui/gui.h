@@ -1530,6 +1530,7 @@ class FurnaceGUI {
     int newSongBehavior;
     int memUsageUnit;
     int cursorFollowsWheel;
+    int noDMFCompat;
     unsigned int maxUndoSteps;
     String mainFontPath;
     String patFontPath;
@@ -1684,6 +1685,7 @@ class FurnaceGUI {
       newSongBehavior(0),
       memUsageUnit(1),
       cursorFollowsWheel(0),
+      noDMFCompat(0),
       maxUndoSteps(100),
       mainFontPath(""),
       patFontPath(""),
@@ -2037,6 +2039,9 @@ class FurnaceGUI {
   bool pianoReadonly;
   int pianoOffset, pianoOffsetEdit;
   int pianoView, pianoInputPadMode;
+  
+  //effect sorting
+  bool effectsShow[10];
 
   // TX81Z
   bool hasACED;
