@@ -40,12 +40,6 @@ static inline bool matchFuzzy(const char* haystack,const char* needle) {
 }
 
 void FurnaceGUI::drawPalette() {
-  auto resetPalette = [](FurnaceGUI* g){
-    g->paletteFirstFrame=true;
-    g->paletteQuery="";
-    g->curPaletteChoice=0;
-  };
-
   bool accepted=false;
 
   if (paletteFirstFrame)
@@ -54,7 +48,20 @@ void FurnaceGUI::drawPalette() {
   int width=ImGui::GetContentRegionAvail().x;
   ImGui::SetNextItemWidth(width);
 
-  if (ImGui::InputTextWithHint("##CommandPaletteSearch","Search...",&paletteQuery) || paletteFirstFrame) {
+  const char* hint="Search...";
+  switch (curPaletteType) {
+  case CMDPAL_TYPE_RECENT:
+    hint="Search recent files...";
+    break;
+  case CMDPAL_TYPE_INSTRUMENTS:
+    hint="Search instruments...";
+    break;
+  case CMDPAL_TYPE_SAMPLES:
+    hint="Search samples...";
+    break;
+  }
+
+  if (ImGui::InputTextWithHint("##CommandPaletteSearch",hint,&paletteQuery) || paletteFirstFrame) {
     paletteSearchResults.clear();
 
     switch (curPaletteType) {
@@ -69,7 +76,27 @@ void FurnaceGUI::drawPalette() {
 
     case CMDPAL_TYPE_RECENT:
       for (int i=0; i<(int)recentFile.size(); i++) {
-        if (matchFuzzy(recentFile[i].c_str(),paletteQuery.c_str())) {
+        if (matchFuzzy(recentFile.at(i).c_str(),paletteQuery.c_str())) {
+          paletteSearchResults.push_back(i);
+        }
+      }
+      break;
+
+    case CMDPAL_TYPE_INSTRUMENTS:
+      if (matchFuzzy("- None -",paletteQuery.c_str())) {
+        paletteSearchResults.push_back(0);
+      }
+      for (int i=0; i<e->song.insLen; i++) {
+        if (matchFuzzy(e->song.ins[i]->name.c_str(),paletteQuery.c_str())) {
+          paletteSearchResults.push_back(i+1); // because over here ins=0 is 'None'
+        }
+      }
+      break;
+
+    case CMDPAL_TYPE_SAMPLES:
+      for (int i=0; i<e->song.sampleLen; i++) {
+        logD("ins #%x: %s", i, e->song.sample[i]->name.c_str());
+        if (matchFuzzy(e->song.sample[i]->name.c_str(),paletteQuery.c_str())) {
           paletteSearchResults.push_back(i);
         }
       }
@@ -100,13 +127,23 @@ void FurnaceGUI::drawPalette() {
       bool current=(i==curPaletteChoice);
       int id=paletteSearchResults[i];
 
-      const char *s="???";
+      const char* s="???";
       switch (curPaletteType) {
       case CMDPAL_TYPE_MAIN:
         s=guiActions[id].friendlyName;
         break;
       case CMDPAL_TYPE_RECENT:
-        s=recentFile[id].c_str();
+        s=recentFile.at(id).c_str();
+        break;
+      case CMDPAL_TYPE_INSTRUMENTS:
+        if (id==0) {
+          s="- None -";
+        } else {
+          s=e->song.ins[id-1]->name.c_str();
+        }
+        break;
+      case CMDPAL_TYPE_SAMPLES:
+        s=e->song.sample[id]->name.c_str();
         break;
       default:
         logE("invalid command palette type");
@@ -133,33 +170,35 @@ void FurnaceGUI::drawPalette() {
     ImGui::CloseCurrentPopup();
   }
 
+  // do not move this to after the resetPalette() calls!
+  // if they are called before and we're jumping from one palette to the next, the paletteFirstFrame won't be true at the start and the setup will not happen.
+  paletteFirstFrame=false;
+
   if (accepted) {
-    if (paletteSearchResults.size()==0) {
-      ImGui::CloseCurrentPopup();
-    } else {
+    if (paletteSearchResults.size()>0) {
       int i=paletteSearchResults[curPaletteChoice];
       switch (curPaletteType) {
       case CMDPAL_TYPE_MAIN:
-        resetPalette(this);
         doAction(i);
-        if (i<GUI_ACTION_CMDPAL_MIN || GUI_ACTION_CMDPAL_MAX<i) {
-          ImGui::CloseCurrentPopup();
-        }
         break;
 
       case CMDPAL_TYPE_RECENT:
-        resetPalette(this);
-        openRecentFile(recentFile[i]);
-        ImGui::CloseCurrentPopup();
+        openRecentFile(recentFile.at(i));
+        break;
+
+      case CMDPAL_TYPE_INSTRUMENTS:
+        curIns=i-1;
+        break;
+
+      case CMDPAL_TYPE_SAMPLES:
+        curSample=i;
         break;
 
       default:
         logE("invalid command palette type");
-        ImGui::CloseCurrentPopup();
         break;
       };
     }
+    ImGui::CloseCurrentPopup();
   }
-
-  paletteFirstFrame=false;
 }

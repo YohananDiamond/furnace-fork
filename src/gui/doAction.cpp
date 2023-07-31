@@ -188,9 +188,19 @@ void FurnaceGUI::doAction(int what) {
       break;
     case GUI_ACTION_COMMAND_PALETTE:
       displayPalette=true;
+      curPaletteType=CMDPAL_TYPE_MAIN;
       break;
     case GUI_ACTION_CMDPAL_RECENT:
+      displayPalette=true;
       curPaletteType=CMDPAL_TYPE_RECENT;
+      break;
+    case GUI_ACTION_CMDPAL_INSTRUMENTS:
+      displayPalette=true;
+      curPaletteType=CMDPAL_TYPE_INSTRUMENTS;
+      break;
+    case GUI_ACTION_CMDPAL_SAMPLES:
+      displayPalette=true;
+      curPaletteType=CMDPAL_TYPE_SAMPLES;
       break;
     case GUI_ACTION_WINDOW_EDIT_CONTROLS:
       nextWindow=GUI_WINDOW_EDIT_CONTROLS;
