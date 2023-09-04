@@ -167,7 +167,7 @@ void DivPlatformES5506::acquire(short** buf, size_t len) {
       buf[(o<<1)|1][h]=es5506.rout(o);
     }
     for (int i=chanMax; i>=0; i--) {
-      oscBuf[i]->data[oscBuf[i]->needle++]=(es5506.voice_lout(i)+es5506.voice_rout(i))>>6;
+      oscBuf[i]->data[oscBuf[i]->needle++]=(es5506.voice_lout(i)+es5506.voice_rout(i))>>5;
     }
   }
 }
@@ -1057,6 +1057,10 @@ DivMacroInt* DivPlatformES5506::getChanMacroInt(int ch) {
   return &chan[ch].std;
 }
 
+unsigned short DivPlatformES5506::getPan(int ch) {
+  return ((chan[ch].lVol>>4)<<8)|(chan[ch].rVol>>4);
+}
+
 void DivPlatformES5506::reset() {
   while (!hostIntf32.empty()) hostIntf32.pop();
   while (!hostIntf8.empty()) hostIntf8.pop();
@@ -1103,8 +1107,6 @@ void DivPlatformES5506::notifyInsChange(int ins) {
 }
 
 void DivPlatformES5506::notifyWaveChange(int wave) {
-  // TODO when wavetables are added
-  // TODO they probably won't be added unless the samples reside in RAM
 }
 
 void DivPlatformES5506::notifyInsDeletion(void* ins) {

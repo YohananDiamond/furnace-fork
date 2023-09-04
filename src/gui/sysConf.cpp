@@ -24,7 +24,7 @@
 
 bool FurnaceGUI::drawSysConf(int chan, DivSystem type, DivConfig& flags, bool modifyOnChange, bool fromMenu) {
   bool altered=false;
-  bool restart=settings.restartOnFlagChange && modifyOnChange;
+  bool restart=modifyOnChange;
   bool supportsCustomRate=true;
 
   switch (type) {
@@ -484,10 +484,7 @@ bool FurnaceGUI::drawSysConf(int chan, DivSystem type, DivConfig& flags, bool mo
       }
       break;
     }
-    case DIV_SYSTEM_NES:
-    case DIV_SYSTEM_VRC6:
-    case DIV_SYSTEM_FDS:
-    case DIV_SYSTEM_MMC5: {
+    case DIV_SYSTEM_NES: {
       int clockSel=flags.getInt("clockSel",0);
       bool dpcmMode=flags.getBool("dpcmMode",true);
 
@@ -525,6 +522,35 @@ bool FurnaceGUI::drawSysConf(int chan, DivSystem type, DivConfig& flags, bool mo
         e->lockSave([&]() {
           flags.set("clockSel",clockSel);
           flags.set("dpcmMode",dpcmMode);
+        });
+      }
+      break;
+    }
+    case DIV_SYSTEM_VRC6:
+    case DIV_SYSTEM_FDS:
+    case DIV_SYSTEM_MMC5: {
+      int clockSel=flags.getInt("clockSel",0);
+
+      ImGui::Text("Clock rate:");
+
+      ImGui::Indent();
+      if (ImGui::RadioButton("NTSC (1.79MHz)",clockSel==0)) {
+        clockSel=0;
+        altered=true;
+      }
+      if (ImGui::RadioButton("PAL (1.67MHz)",clockSel==1)) {
+        clockSel=1;
+        altered=true;
+      }
+      if (ImGui::RadioButton("Dendy (1.77MHz)",clockSel==2)) {
+        clockSel=2;
+        altered=true;
+      }
+      ImGui::Unindent();
+
+      if (altered) {
+        e->lockSave([&]() {
+          flags.set("clockSel",clockSel);
         });
       }
       break;
@@ -990,6 +1016,7 @@ bool FurnaceGUI::drawSysConf(int chan, DivSystem type, DivConfig& flags, bool mo
     case DIV_SYSTEM_X1_010: {
       int clockSel=flags.getInt("clockSel",0);
       bool stereo=flags.getBool("stereo",false);
+      bool isBanked=flags.getBool("isBanked",false);
 
       ImGui::Text("Clock rate:");
       ImGui::Indent();
@@ -1011,10 +1038,15 @@ bool FurnaceGUI::drawSysConf(int chan, DivSystem type, DivConfig& flags, bool mo
         altered=true;
       }
 
+      if (ImGui::Checkbox("Bankswitched (Seta 2)",&isBanked)) {
+        altered=true;
+      }
+
       if (altered) {
         e->lockSave([&]() {
           flags.set("clockSel",clockSel);
           flags.set("stereo",stereo);
+          flags.set("isBanked",isBanked);
         });
       }
       break;
@@ -2073,6 +2105,7 @@ bool FurnaceGUI::drawSysConf(int chan, DivSystem type, DivConfig& flags, bool mo
     case DIV_SYSTEM_PV1000:
     case DIV_SYSTEM_VERA:
     case DIV_SYSTEM_C140:
+    case DIV_SYSTEM_C219:
       break;
     case DIV_SYSTEM_YMU759:
       supportsCustomRate=false;

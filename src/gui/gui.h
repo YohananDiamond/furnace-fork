@@ -259,6 +259,7 @@ enum FurnaceGUIColors {
   GUI_COLOR_INSTR_SCSP,
   GUI_COLOR_INSTR_TED,
   GUI_COLOR_INSTR_C140,
+  GUI_COLOR_INSTR_C219,
   GUI_COLOR_INSTR_UNKNOWN,
 
   GUI_COLOR_CHANNEL_BG,
@@ -519,6 +520,8 @@ enum FurnaceGUIActions {
   GUI_ACTION_CMDPAL_RECENT,
   GUI_ACTION_CMDPAL_INSTRUMENTS,
   GUI_ACTION_CMDPAL_SAMPLES,
+  GUI_ACTION_CMDPAL_INSTRUMENT_CHANGE,
+  GUI_ACTION_CMDPAL_ADD_CHIP,
   GUI_ACTION_CMDPAL_MAX,
 
   GUI_ACTION_WINDOW_EDIT_CONTROLS,
@@ -1342,6 +1345,7 @@ class FurnaceGUI {
   bool displayPendingIns, pendingInsSingle, displayPendingRawSample, snesFilterHex, modTableHex, displayEditString;
   bool mobileEdit;
   bool killGraphics;
+  bool audioEngineChanged, settingsChanged, debugFFT;
   bool willExport[DIV_MAX_CHIPS];
   int vgmExportVersion;
   int vgmExportTrailingTicks;
@@ -1351,6 +1355,8 @@ class FurnaceGUI {
   int waveEditStyle;
   int displayInsTypeListMakeInsSample;
   int mobileEditPage;
+  int wheelCalmDown;
+  int shallDetectScale;
   float mobileMenuPos, autoButtonSize, mobileEditAnim;
   ImVec2 mobileEditButtonPos, mobileEditButtonSize;
   const int* curSysSection;
@@ -1358,6 +1364,11 @@ class FurnaceGUI {
   short fmPreview[FM_PREVIEW_SIZE];
   bool updateFMPreview, fmPreviewOn, fmPreviewPaused;
   void* fmPreviewOPN;
+  void* fmPreviewOPM;
+  void* fmPreviewOPL;
+  void* fmPreviewOPLL;
+  void* fmPreviewOPZ;
+  void* fmPreviewOPZInterface;
   String* editString;
 
   String pendingRawSample;
@@ -1394,6 +1405,7 @@ class FurnaceGUI {
 
   ImFont* mainFont;
   ImFont* iconFont;
+  ImFont* furIconFont;
   ImFont* patFont;
   ImFont* bigFont;
   ImFont* headFont;
@@ -1427,6 +1439,14 @@ class FurnaceGUI {
     int c64Core;
     int pokeyCore;
     int opnCore;
+    int arcadeCoreRender;
+    int ym2612CoreRender;
+    int snCoreRender;
+    int nesCoreRender;
+    int fdsCoreRender;
+    int c64CoreRender;
+    int pokeyCoreRender;
+    int opnCoreRender;
     int pcSpeakerOutMethod;
     String yrw801Path;
     String tg100Path;
@@ -1455,7 +1475,6 @@ class FurnaceGUI {
     int sysSeparators;
     int forceMono;
     int controlLayout;
-    int restartOnFlagChange;
     int statusDisplay;
     float dpiScale;
     int viewPrevPattern;
@@ -1561,6 +1580,9 @@ class FurnaceGUI {
     int insTypeMenu;
     int capitalMenuBar;
     int centerPopup;
+    int insIconsStyle;
+    int classicChipOptions;
+    int wasapiEx;
     unsigned int maxUndoSteps;
     String mainFontPath;
     String headFontPath;
@@ -1595,6 +1617,14 @@ class FurnaceGUI {
       c64Core(0),
       pokeyCore(1),
       opnCore(1),
+      arcadeCoreRender(1),
+      ym2612CoreRender(0),
+      snCoreRender(0),
+      nesCoreRender(0),
+      fdsCoreRender(1),
+      c64CoreRender(1),
+      pokeyCoreRender(1),
+      opnCoreRender(1),
       pcSpeakerOutMethod(0),
       yrw801Path(""),
       tg100Path(""),
@@ -1621,7 +1651,6 @@ class FurnaceGUI {
       sysSeparators(1),
       forceMono(0),
       controlLayout(3),
-      restartOnFlagChange(1),
       statusDisplay(0),
       dpiScale(0.0f),
       viewPrevPattern(1),
@@ -1726,6 +1755,9 @@ class FurnaceGUI {
       insTypeMenu(1),
       capitalMenuBar(0),
       centerPopup(1),
+      insIconsStyle(1),
+      classicChipOptions(0),
+      wasapiEx(0),
       maxUndoSteps(100),
       mainFontPath(""),
       headFontPath(""),
@@ -2040,14 +2072,18 @@ class FurnaceGUI {
     double inBufPosFrac;
     unsigned short needle;
     fftw_complex* outBuf;
+    double* corrBuf;
     fftw_plan plan;
+    fftw_plan planI;
     ChanOscStatus():
       inBuf(NULL),
       inBufPos(0),
       inBufPosFrac(0.0f),
       needle(0),
       outBuf(NULL),
-      plan(NULL) {}
+      corrBuf(NULL),
+      plan(NULL),
+      planI(NULL) {}
   } chanOscChan[DIV_MAX_CHANS];
 
   // visualizer
@@ -2128,9 +2164,14 @@ class FurnaceGUI {
   void drawFMEnv(unsigned char tl, unsigned char ar, unsigned char dr, unsigned char d2r, unsigned char rr, unsigned char sl, unsigned char sus, unsigned char egt, unsigned char algOrGlobalSus, float maxTl, float maxArDr, float maxRr, const ImVec2& size, unsigned short instType);
   void drawGBEnv(unsigned char vol, unsigned char len, unsigned char sLen, bool dir, const ImVec2& size);
   bool drawSysConf(int chan, DivSystem type, DivConfig& flags, bool modifyOnChange, bool fromMenu=false);
-  void kvsConfig(DivInstrument* ins);
+  void kvsConfig(DivInstrument* ins, bool supportsKVS=true);
   void drawFMPreview(const ImVec2& size);
-  void renderFMPreview(const DivInstrumentFM& params, int pos=0);
+  void renderFMPreview(const DivInstrument* ins, int pos=0);
+  void renderFMPreviewOPN(const DivInstrumentFM& params, int pos=0);
+  void renderFMPreviewOPM(const DivInstrumentFM& params, int pos=0);
+  void renderFMPreviewOPLL(const DivInstrumentFM& params, int pos=0);
+  void renderFMPreviewOPL(const DivInstrumentFM& params, int pos=0);
+  void renderFMPreviewOPZ(const DivInstrumentFM& params, int pos=0);
 
   // these ones offer ctrl-wheel fine value changes.
   bool CWSliderScalar(const char* label, ImGuiDataType data_type, void* p_data, const void* p_min, const void* p_max, const char* format=NULL, ImGuiSliderFlags flags=0);
@@ -2326,6 +2367,7 @@ class FurnaceGUI {
   int loadStream(String path);
   void openRecentFile(String path);
   void pushRecentFile(String path);
+  void pushRecentSys(const char* path);
   void exportAudio(String path, DivAudioExportModes mode);
   void delFirstBackup(String name);
 

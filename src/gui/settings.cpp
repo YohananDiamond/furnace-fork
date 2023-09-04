@@ -27,7 +27,9 @@
 #include "intConst.h"
 #include "ImGuiFileDialog.h"
 #include "IconsFontAwesome4.h"
+#include "furIcons.h"
 #include "misc/cpp/imgui_stdlib.h"
+#include "scaling.h"
 #include <fmt/printf.h>
 #include <imgui.h>
 
@@ -80,11 +82,13 @@ const char* patFonts[]={
 
 const char* audioBackends[]={
   "JACK",
-  "SDL"
+  "SDL",
+  "PortAudio"
 };
 
 const bool isProAudio[]={
   true,
+  false,
   false
 };
 
@@ -575,7 +579,7 @@ void FurnaceGUI::drawSettings() {
           float vol=fabs(sysVol);
           ImGui::PushID(i);
 
-          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x-ImGui::CalcTextSize("Invert").x-ImGui::GetFrameHeightWithSpacing()*2.0-ImGui::GetStyle().ItemSpacing.x);
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x-ImGui::CalcTextSize("Invert").x-ImGui::GetFrameHeightWithSpacing()*2.0-ImGui::GetStyle().ItemSpacing.x*2.0);
           if (ImGui::BeginCombo("##System",getSystemName(sysID))) {
             for (int j=0; availableSystems[j]; j++) {
               if (ImGui::Selectable(getSystemName((DivSystem)availableSystems[j]),sysID==availableSystems[j])) {
@@ -594,11 +598,13 @@ void FurnaceGUI::drawSettings() {
           }
           ImGui::SameLine();
           //ImGui::BeginDisabled(settings.initialSys.size()<=4);
+          pushDestColor();
           if (ImGui::Button(ICON_FA_MINUS "##InitSysRemove")) {
             doRemove=i;
           }
+          popDestColor();
           //ImGui::EndDisabled();
-          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x-ImGui::GetFrameHeightWithSpacing()*2.0-ImGui::GetStyle().ItemSpacing.x*2.0);
           if (CWSliderFloat("Volume",&vol,0.0f,3.0f)) {
             if (doInvert) {
               if (vol<0.0001) vol=0.0001;
@@ -608,13 +614,13 @@ void FurnaceGUI::drawSettings() {
             sysVol=doInvert?-vol:vol;
             settings.initialSys.set(fmt::sprintf("vol%d",i),(float)sysVol);
           } rightClickable
-          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x-ImGui::GetFrameHeightWithSpacing()*2.0-ImGui::GetStyle().ItemSpacing.x*2.0);
           if (CWSliderFloat("Panning",&sysPan,-1.0f,1.0f)) {
             if (sysPan<-1.0f) sysPan=-1.0f;
             if (sysPan>1.0f) sysPan=1.0f;
             settings.initialSys.set(fmt::sprintf("pan%d",i),(float)sysPan);
           } rightClickable
-          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x-ImGui::GetFrameHeightWithSpacing()*2.0-ImGui::GetStyle().ItemSpacing.x*2.0);
           if (CWSliderFloat("Front/Rear",&sysPanFR,-1.0f,1.0f)) {
             if (sysPanFR<-1.0f) sysPanFR=-1.0f;
             if (sysPanFR>1.0f) sysPanFR=1.0f;
@@ -674,11 +680,6 @@ void FurnaceGUI::drawSettings() {
         }
         ImGui::Unindent();
 
-        bool restartOnFlagChangeB=settings.restartOnFlagChange;
-        if (ImGui::Checkbox("Restart song when changing chip properties",&restartOnFlagChangeB)) {
-          settings.restartOnFlagChange=restartOnFlagChangeB;
-        }
-
         // SUBSECTION START-UP
         CONFIG_SUBSECTION("Start-up");
         ImGui::Text("Play intro on start-up:");
@@ -722,118 +723,174 @@ void FurnaceGUI::drawSettings() {
       CONFIG_SECTION("Audio") {
         // SUBSECTION OUTPUT
         CONFIG_SUBSECTION("Output");
+        if (ImGui::BeginTable("##Output",2)) {
+          ImGui::TableSetupColumn("##Label",ImGuiTableColumnFlags_WidthFixed);
+          ImGui::TableSetupColumn("##Combo",ImGuiTableColumnFlags_WidthStretch);
+#if defined(HAVE_JACK) || defined(HAVE_PA)
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("Backend");
+          ImGui::TableNextColumn();
+          int prevAudioEngine=settings.audioEngine;
+          if (ImGui::BeginCombo("##Backend",audioBackends[settings.audioEngine])) {
 #ifdef HAVE_JACK
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Backend");
-        ImGui::SameLine();
-        int prevAudioEngine=settings.audioEngine;
-        if (ImGui::Combo("##Backend",&settings.audioEngine,audioBackends,2)) {
-          if (settings.audioEngine!=prevAudioEngine) {
-            if (!isProAudio[settings.audioEngine]) settings.audioChans=2;
+            if (ImGui::Selectable("JACK",settings.audioEngine==DIV_AUDIO_JACK)) {
+              settings.audioEngine=DIV_AUDIO_JACK;
+            }
+#endif
+            if (ImGui::Selectable("SDL",settings.audioEngine==DIV_AUDIO_SDL)) {
+              settings.audioEngine=DIV_AUDIO_SDL;
+            }
+#ifdef HAVE_PA
+            if (ImGui::Selectable("PortAudio",settings.audioEngine==DIV_AUDIO_PORTAUDIO)) {
+              settings.audioEngine=DIV_AUDIO_PORTAUDIO;
+            }
+#endif
+            if (settings.audioEngine!=prevAudioEngine) {
+              audioEngineChanged=true;
+              settings.audioDevice="";
+              if (!isProAudio[settings.audioEngine]) settings.audioChans=2;
+            }
+            ImGui::EndCombo();
           }
-        }
 #endif
 
-        if (settings.audioEngine==DIV_AUDIO_SDL) {
-          ImGui::AlignTextToFramePadding();
-          ImGui::Text("Driver");
-          ImGui::SameLine();
-          if (ImGui::BeginCombo("##SDLADriver",settings.sdlAudioDriver.empty()?"Automatic":settings.sdlAudioDriver.c_str())) {
-            if (ImGui::Selectable("Automatic",settings.sdlAudioDriver.empty())) {
-              settings.sdlAudioDriver="";
-            }
-            for (String& i: availAudioDrivers) {
-              if (ImGui::Selectable(i.c_str(),i==settings.sdlAudioDriver)) {
-                settings.sdlAudioDriver=i;
+          if (settings.audioEngine==DIV_AUDIO_SDL) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Driver");
+            ImGui::TableNextColumn();
+            if (ImGui::BeginCombo("##SDLADriver",settings.sdlAudioDriver.empty()?"Automatic":settings.sdlAudioDriver.c_str())) {
+              if (ImGui::Selectable("Automatic",settings.sdlAudioDriver.empty())) {
+                settings.sdlAudioDriver="";
               }
+              for (String& i: availAudioDrivers) {
+                if (ImGui::Selectable(i.c_str(),i==settings.sdlAudioDriver)) {
+                  settings.sdlAudioDriver=i;
+                }
+              }
+              ImGui::EndCombo();
             }
-            ImGui::EndCombo();
-          }
-          if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("you may need to restart Furnace for this setting to take effect.");
-          }
-        }
-
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Device");
-        ImGui::SameLine();
-        String audioDevName=settings.audioDevice.empty()?"<System default>":settings.audioDevice;
-        if (ImGui::BeginCombo("##AudioDevice",audioDevName.c_str())) {
-          if (ImGui::Selectable("<System default>",settings.audioDevice.empty())) {
-            settings.audioDevice="";
-          }
-          for (String& i: e->getAudioDevices()) {
-            if (ImGui::Selectable(i.c_str(),i==settings.audioDevice)) {
-              settings.audioDevice=i;
+            if (ImGui::IsItemHovered()) {
+              ImGui::SetTooltip("you may need to restart Furnace for this setting to take effect.");
             }
           }
-          ImGui::EndCombo();
-        }
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Sample rate");
-        ImGui::SameLine();
-        String sr=fmt::sprintf("%d",settings.audioRate);
-        if (ImGui::BeginCombo("##SampleRate",sr.c_str())) {
-          SAMPLE_RATE_SELECTABLE(8000);
-          SAMPLE_RATE_SELECTABLE(16000);
-          SAMPLE_RATE_SELECTABLE(22050);
-          SAMPLE_RATE_SELECTABLE(32000);
-          SAMPLE_RATE_SELECTABLE(44100);
-          SAMPLE_RATE_SELECTABLE(48000);
-          SAMPLE_RATE_SELECTABLE(88200);
-          SAMPLE_RATE_SELECTABLE(96000);
-          SAMPLE_RATE_SELECTABLE(192000);
-          ImGui::EndCombo();
-        }
-
-        if (isProAudio[settings.audioEngine]) {
-          ImGui::Text("Outputs");
-          ImGui::SameLine();
-          if (ImGui::InputInt("##AudioChansI",&settings.audioChans,1,1)) {
-            if (settings.audioChans<1) settings.audioChans=1;
-            if (settings.audioChans>16) settings.audioChans=16;
-          }
-        } else {
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
           ImGui::AlignTextToFramePadding();
-          ImGui::Text("Channels");
-          ImGui::SameLine();
-          String chStr=(settings.audioChans<1 || settings.audioChans>8)?"What?":nonProAudioOuts[settings.audioChans-1];
-          if (ImGui::BeginCombo("##AudioChans",chStr.c_str())) {
-            CHANS_SELECTABLE(1);
-            CHANS_SELECTABLE(2);
-            CHANS_SELECTABLE(4);
-            CHANS_SELECTABLE(6);
-            CHANS_SELECTABLE(8);
+          ImGui::Text("Device");
+          ImGui::TableNextColumn();
+          if (audioEngineChanged) {
+            ImGui::BeginDisabled();
+            if (ImGui::BeginCombo("##AudioDevice","<click on OK or Apply first>")) {
+              ImGui::Text("ALERT - TRESPASSER DETECTED");
+              if (ImGui::IsItemHovered()) {
+                showError("you have been arrested for trying to engage with a disabled combo box.");
+                ImGui::CloseCurrentPopup();
+              }
+              ImGui::EndCombo();
+            }
+            ImGui::EndDisabled();
+          } else {
+            String audioDevName=settings.audioDevice.empty()?"<System default>":settings.audioDevice;
+            if (ImGui::BeginCombo("##AudioDevice",audioDevName.c_str())) {
+              if (ImGui::Selectable("<System default>",settings.audioDevice.empty())) {
+                settings.audioDevice="";
+              }
+              for (String& i: e->getAudioDevices()) {
+                if (ImGui::Selectable(i.c_str(),i==settings.audioDevice)) {
+                  settings.audioDevice=i;
+                }
+              }
+              ImGui::EndCombo();
+            }
+          }
+
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("Sample rate");
+          ImGui::TableNextColumn();
+          String sr=fmt::sprintf("%d",settings.audioRate);
+          if (ImGui::BeginCombo("##SampleRate",sr.c_str())) {
+            SAMPLE_RATE_SELECTABLE(8000);
+            SAMPLE_RATE_SELECTABLE(16000);
+            SAMPLE_RATE_SELECTABLE(22050);
+            SAMPLE_RATE_SELECTABLE(32000);
+            SAMPLE_RATE_SELECTABLE(44100);
+            SAMPLE_RATE_SELECTABLE(48000);
+            SAMPLE_RATE_SELECTABLE(88200);
+            SAMPLE_RATE_SELECTABLE(96000);
+            SAMPLE_RATE_SELECTABLE(192000);
             ImGui::EndCombo();
           }
-        }
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Buffer size");
-        ImGui::SameLine();
-        String bs=fmt::sprintf("%d (latency: ~%.1fms)",settings.audioBufSize,2000.0*(double)settings.audioBufSize/(double)MAX(1,settings.audioRate));
-        if (ImGui::BeginCombo("##BufferSize",bs.c_str())) {
-          BUFFER_SIZE_SELECTABLE(64);
-          BUFFER_SIZE_SELECTABLE(128);
-          BUFFER_SIZE_SELECTABLE(256);
-          BUFFER_SIZE_SELECTABLE(512);
-          BUFFER_SIZE_SELECTABLE(1024);
-          BUFFER_SIZE_SELECTABLE(2048);
-          ImGui::EndCombo();
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          if (isProAudio[settings.audioEngine]) {
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Outputs");
+            ImGui::TableNextColumn();
+            if (ImGui::InputInt("##AudioChansI",&settings.audioChans,1,1)) {
+              if (settings.audioChans<1) settings.audioChans=1;
+              if (settings.audioChans>16) settings.audioChans=16;
+            }
+          } else {
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Channels");
+            ImGui::TableNextColumn();
+            String chStr=(settings.audioChans<1 || settings.audioChans>8)?"What?":nonProAudioOuts[settings.audioChans-1];
+            if (ImGui::BeginCombo("##AudioChans",chStr.c_str())) {
+              CHANS_SELECTABLE(1);
+              CHANS_SELECTABLE(2);
+              CHANS_SELECTABLE(4);
+              CHANS_SELECTABLE(6);
+              CHANS_SELECTABLE(8);
+              ImGui::EndCombo();
+            }
+          }
+
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("Buffer size");
+          ImGui::TableNextColumn();
+          String bs=fmt::sprintf("%d (latency: ~%.1fms)",settings.audioBufSize,2000.0*(double)settings.audioBufSize/(double)MAX(1,settings.audioRate));
+          if (ImGui::BeginCombo("##BufferSize",bs.c_str())) {
+            BUFFER_SIZE_SELECTABLE(64);
+            BUFFER_SIZE_SELECTABLE(128);
+            BUFFER_SIZE_SELECTABLE(256);
+            BUFFER_SIZE_SELECTABLE(512);
+            BUFFER_SIZE_SELECTABLE(1024);
+            BUFFER_SIZE_SELECTABLE(2048);
+            ImGui::EndCombo();
+          }
+          ImGui::EndTable();
         }
 
         bool lowLatencyB=settings.lowLatency;
-        if (ImGui::Checkbox("Low-latency mode (experimental!)",&lowLatencyB)) {
+        if (ImGui::Checkbox("Low-latency mode",&lowLatencyB)) {
           settings.lowLatency=lowLatencyB;
         }
         if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("reduces latency by running the engine faster than the tick rate.\nuseful for live playback/jam mode.\n\nwarning: experimental! may produce glitches.\nonly enable if your buffer size is small (10ms or less).");
+          ImGui::SetTooltip("reduces latency by running the engine faster than the tick rate.\nuseful for live playback/jam mode.\n\nwarning: nonly enable if your buffer size is small (10ms or less).");
         }
 
         bool forceMonoB=settings.forceMono;
         if (ImGui::Checkbox("Force mono audio",&forceMonoB)) {
           settings.forceMono=forceMonoB;
+        }
+
+        if (settings.audioEngine==DIV_AUDIO_PORTAUDIO) {
+          if (settings.audioDevice.find("[Windows WASAPI] ")==0) {
+            bool wasapiExB=settings.wasapiEx;
+            if (ImGui::Checkbox("Exclusive mode",&wasapiExB)) {
+              settings.wasapiEx=wasapiExB;
+            }
+          }
         }
 
         TAAudioDesc& audioWant=e->getAudioDescWant();
@@ -1193,46 +1250,113 @@ void FurnaceGUI::drawSettings() {
       CONFIG_SECTION("Emulation") {
         // SUBSECTION LAYOUT
         CONFIG_SUBSECTION("Cores");
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Arcade/YM2151 core");
-        ImGui::SameLine();
-        ImGui::Combo("##ArcadeCore",&settings.arcadeCore,arcadeCores,2);
+        if (ImGui::BeginTable("##Cores",3)) {
+          ImGui::TableSetupColumn("##System",ImGuiTableColumnFlags_WidthFixed);
+          ImGui::TableSetupColumn("##PlaybackCores",ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableSetupColumn("##RenderCores",ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+          ImGui::TableNextColumn();
+          ImGui::Text("System");
+          ImGui::TableNextColumn();
+          ImGui::Text("Playback Core(s)");
+          if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("used for playback");
+          }
+          ImGui::TableNextColumn();
+          ImGui::Text("Render Core(s)");
+          if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("used in audio export");
+          }
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Genesis/YM2612 core");
-        ImGui::SameLine();
-        ImGui::Combo("##YM2612Core",&settings.ym2612Core,ym2612Cores,2);
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("YM2151");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##ArcadeCore",&settings.arcadeCore,arcadeCores,2);
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##ArcadeCoreRender",&settings.arcadeCoreRender,arcadeCores,2);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("SN76489 core");
-        ImGui::SameLine();
-        ImGui::Combo("##SNCore",&settings.snCore,snCores,2);
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("YM2612");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##YM2612Core",&settings.ym2612Core,ym2612Cores,2);
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##YM2612CoreRender",&settings.ym2612CoreRender,ym2612Cores,2);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("NES core");
-        ImGui::SameLine();
-        ImGui::Combo("##NESCore",&settings.nesCore,nesCores,2);
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("SN76489");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##SNCore",&settings.snCore,snCores,2);
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##SNCoreRender",&settings.snCoreRender,snCores,2);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("FDS core");
-        ImGui::SameLine();
-        ImGui::Combo("##FDSCore",&settings.fdsCore,nesCores,2);
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("NES");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##NESCore",&settings.nesCore,nesCores,2);
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##NESCoreRender",&settings.nesCoreRender,nesCores,2);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("SID core");
-        ImGui::SameLine();
-        ImGui::Combo("##C64Core",&settings.c64Core,c64Cores,3);
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("FDS");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##FDSCore",&settings.fdsCore,nesCores,2);
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##FDSCoreRender",&settings.fdsCoreRender,nesCores,2);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("POKEY core");
-        ImGui::SameLine();
-        ImGui::Combo("##POKEYCore",&settings.pokeyCore,pokeyCores,2);
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("SID");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##C64Core",&settings.c64Core,c64Cores,3);
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##C64CoreRender",&settings.c64CoreRender,c64Cores,3);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("OPN/OPNA/OPNB cores");
-        ImGui::SameLine();
-        ImGui::Combo("##OPNCore",&settings.opnCore,opnCores,2);
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("POKEY");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##POKEYCore",&settings.pokeyCore,pokeyCores,2);
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##POKEYCoreRender",&settings.pokeyCoreRender,pokeyCores,2);
 
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("OPN/OPNA/OPNB");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##OPNCore",&settings.opnCore,opnCores,2);
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::Combo("##OPNCoreRender",&settings.opnCoreRender,opnCores,2);
+          ImGui::EndTable();
+        }
         ImGui::Separator();
 
         ImGui::AlignTextToFramePadding();
@@ -1240,6 +1364,7 @@ void FurnaceGUI::drawSettings() {
         ImGui::SameLine();
         ImGui::Combo("##PCSOutMethod",&settings.pcSpeakerOutMethod,pcspkrOutMethods,5);
 
+        /*
         ImGui::Separator();
         ImGui::Text("Sample ROMs:");
 
@@ -1269,6 +1394,7 @@ void FurnaceGUI::drawSettings() {
         if (ImGui::Button(ICON_FA_FOLDER "##MU5Load")) {
           openFileDialog(GUI_FILE_MU5_ROM_OPEN);
         }
+        */
 
         END_SECTION;
       }
@@ -1290,6 +1416,7 @@ void FurnaceGUI::drawSettings() {
           KEYBIND_CONFIG_BEGIN("keysGlobal");
 
           UI_KEYBIND_CONFIG(GUI_ACTION_NEW);
+          UI_KEYBIND_CONFIG(GUI_ACTION_CLEAR);
           UI_KEYBIND_CONFIG(GUI_ACTION_OPEN);
           UI_KEYBIND_CONFIG(GUI_ACTION_OPEN_BACKUP);
           UI_KEYBIND_CONFIG(GUI_ACTION_SAVE);
@@ -1315,6 +1442,7 @@ void FurnaceGUI::drawSettings() {
           UI_KEYBIND_CONFIG(GUI_ACTION_FOLLOW_ORDERS);
           UI_KEYBIND_CONFIG(GUI_ACTION_FOLLOW_PATTERN);
           UI_KEYBIND_CONFIG(GUI_ACTION_FULLSCREEN);
+          UI_KEYBIND_CONFIG(GUI_ACTION_TX81Z_REQUEST);
           UI_KEYBIND_CONFIG(GUI_ACTION_PANIC);
 
           KEYBIND_CONFIG_END;
@@ -1323,40 +1451,45 @@ void FurnaceGUI::drawSettings() {
         if (ImGui::TreeNode("Window activation")) {
           KEYBIND_CONFIG_BEGIN("keysWindow");
 
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_EDIT_CONTROLS);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_ORDERS);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_INS_LIST);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_INS_EDIT);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_FIND);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_SETTINGS);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_SONG_INFO);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_SUBSONGS);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_PATTERN);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_SPEED);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_INS_LIST);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_WAVE_LIST);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_WAVE_EDIT);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_SAMPLE_LIST);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_SAMPLE_EDIT);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_ABOUT);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_SETTINGS);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_ORDERS);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_PATTERN);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_MIXER);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_DEBUG);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_GROOVES);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_CHANNELS);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_PAT_MANAGER);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_SYS_MANAGER);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_COMPAT_FLAGS);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_NOTES);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_INS_EDIT);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_WAVE_EDIT);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_SAMPLE_EDIT);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_EDIT_CONTROLS);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_PIANO);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_OSCILLOSCOPE);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_CHAN_OSC);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_EFFECT_LIST);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_VOL_METER);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_STATS);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_COMPAT_FLAGS);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_PIANO);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_NOTES);
-          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_CHANNELS);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_CLOCK);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_REGISTER_VIEW);
           UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_LOG);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_STATS);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_EFFECT_LIST);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_DEBUG);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WINDOW_ABOUT);
+          UI_KEYBIND_CONFIG(GUI_ACTION_COLLAPSE_WINDOW);
+          UI_KEYBIND_CONFIG(GUI_ACTION_CLOSE_WINDOW);
 
           UI_KEYBIND_CONFIG(GUI_ACTION_COMMAND_PALETTE);
           UI_KEYBIND_CONFIG(GUI_ACTION_CMDPAL_RECENT);
           UI_KEYBIND_CONFIG(GUI_ACTION_CMDPAL_INSTRUMENTS);
           UI_KEYBIND_CONFIG(GUI_ACTION_CMDPAL_SAMPLES);
-
-          UI_KEYBIND_CONFIG(GUI_ACTION_COLLAPSE_WINDOW);
-          UI_KEYBIND_CONFIG(GUI_ACTION_CLOSE_WINDOW);
 
           KEYBIND_CONFIG_END;
           ImGui::TreePop();
@@ -1522,6 +1655,7 @@ void FurnaceGUI::drawSettings() {
           UI_KEYBIND_CONFIG(GUI_ACTION_INS_LIST_OPEN);
           UI_KEYBIND_CONFIG(GUI_ACTION_INS_LIST_OPEN_REPLACE);
           UI_KEYBIND_CONFIG(GUI_ACTION_INS_LIST_SAVE);
+          UI_KEYBIND_CONFIG(GUI_ACTION_INS_LIST_SAVE_DMP);
           UI_KEYBIND_CONFIG(GUI_ACTION_INS_LIST_MOVE_UP);
           UI_KEYBIND_CONFIG(GUI_ACTION_INS_LIST_MOVE_DOWN);
           UI_KEYBIND_CONFIG(GUI_ACTION_INS_LIST_DELETE);
@@ -1539,7 +1673,10 @@ void FurnaceGUI::drawSettings() {
           UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_ADD);
           UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_DUPLICATE);
           UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_OPEN);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_OPEN_REPLACE);
           UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_SAVE);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_SAVE_DMW);
+          UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_SAVE_RAW);
           UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_MOVE_UP);
           UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_MOVE_DOWN);
           UI_KEYBIND_CONFIG(GUI_ACTION_WAVE_LIST_DELETE);
@@ -1556,8 +1693,13 @@ void FurnaceGUI::drawSettings() {
 
           UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_ADD);
           UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_DUPLICATE);
+          UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_CREATE_WAVE);
           UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_OPEN);
+          UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_OPEN_REPLACE);
+          UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_OPEN_RAW);
+          UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_OPEN_REPLACE_RAW);
           UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_SAVE);
+          UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_SAVE_RAW);
           UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_MOVE_UP);
           UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_MOVE_DOWN);
           UI_KEYBIND_CONFIG(GUI_ACTION_SAMPLE_LIST_DELETE);
@@ -1914,10 +2056,18 @@ void FurnaceGUI::drawSettings() {
           settings.cursorMoveNoScroll=cursorMoveNoScrollB;
         }
 
-        bool cursorFollowsWheelB=settings.cursorFollowsWheel;
-        if (ImGui::Checkbox("Move cursor with scroll wheel",&cursorFollowsWheelB)) {
-          settings.cursorFollowsWheel=cursorFollowsWheelB;
+        ImGui::Text("Move cursor with scroll wheel:");
+        ImGui::Indent();
+        if (ImGui::RadioButton("No##csw0",settings.cursorFollowsWheel==0)) {
+          settings.cursorFollowsWheel=0;
         }
+        if (ImGui::RadioButton("Yes##csw1",settings.cursorFollowsWheel==1)) {
+          settings.cursorFollowsWheel=1;
+        }
+        if (ImGui::RadioButton("Inverted##csw2",settings.cursorFollowsWheel==2)) {
+          settings.cursorFollowsWheel=2;
+        }
+        ImGui::Unindent();
 
         END_SECTION;
       }
@@ -1946,57 +2096,62 @@ void FurnaceGUI::drawSettings() {
 
         // SUBSECTION TEXT
         CONFIG_SUBSECTION("Text");
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Main font");
-        ImGui::SameLine();
-        ImGui::Combo("##MainFont",&settings.mainFont,mainFonts,7);
-        ImGui::Indent();
-        if (settings.mainFont==6) {
-          ImGui::InputText("##MainFontPath",&settings.mainFontPath);
-          ImGui::SameLine();
-          if (ImGui::Button(ICON_FA_FOLDER "##MainFontLoad")) {
-            openFileDialog(GUI_FILE_LOAD_MAIN_FONT);
+        if (ImGui::BeginTable("##Text",2)) {
+          ImGui::TableSetupColumn("##Label",ImGuiTableColumnFlags_WidthFixed);
+          ImGui::TableSetupColumn("##Combos",ImGuiTableColumnFlags_WidthStretch);
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("Main font");
+          ImGui::TableNextColumn();
+          ImGui::Combo("##MainFont",&settings.mainFont,mainFonts,7);
+          if (settings.mainFont==6) {
+            ImGui::InputText("##MainFontPath",&settings.mainFontPath);
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_FOLDER "##MainFontLoad")) {
+              openFileDialog(GUI_FILE_LOAD_MAIN_FONT);
+            }
           }
-        }
-        if (ImGui::InputInt("Size##MainFontSize",&settings.mainFontSize)) {
-          if (settings.mainFontSize<3) settings.mainFontSize=3;
-          if (settings.mainFontSize>96) settings.mainFontSize=96;
-        }
-        ImGui::Unindent();
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Header font");
-        ImGui::SameLine();
-        ImGui::Combo("##HeadFont",&settings.headFont,headFonts,7);
-        ImGui::Indent();
-        if (settings.headFont==6) {
-          ImGui::InputText("##HeadFontPath",&settings.headFontPath);
-          ImGui::SameLine();
-          if (ImGui::Button(ICON_FA_FOLDER "##HeadFontLoad")) {
-            openFileDialog(GUI_FILE_LOAD_HEAD_FONT);
+          if (ImGui::InputInt("Size##MainFontSize",&settings.mainFontSize)) {
+            if (settings.mainFontSize<3) settings.mainFontSize=3;
+            if (settings.mainFontSize>96) settings.mainFontSize=96;
           }
-        }
-        if (ImGui::InputInt("Size##HeadFontSize",&settings.headFontSize)) {
-          if (settings.headFontSize<3) settings.headFontSize=3;
-          if (settings.headFontSize>96) settings.headFontSize=96;
-        }
-        ImGui::Unindent();
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Pattern font");
-        ImGui::SameLine();
-        ImGui::Combo("##PatFont",&settings.patFont,patFonts,7);
-        ImGui::Indent();
-        if (settings.patFont==6) {
-          ImGui::InputText("##PatFontPath",&settings.patFontPath);
-          ImGui::SameLine();
-          if (ImGui::Button(ICON_FA_FOLDER "##PatFontLoad")) {
-            openFileDialog(GUI_FILE_LOAD_PAT_FONT);
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("Header font");
+          ImGui::TableNextColumn();
+          ImGui::Combo("##HeadFont",&settings.headFont,headFonts,7);
+          if (settings.headFont==6) {
+            ImGui::InputText("##HeadFontPath",&settings.headFontPath);
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_FOLDER "##HeadFontLoad")) {
+              openFileDialog(GUI_FILE_LOAD_HEAD_FONT);
+            }
           }
+          if (ImGui::InputInt("Size##HeadFontSize",&settings.headFontSize)) {
+            if (settings.headFontSize<3) settings.headFontSize=3;
+            if (settings.headFontSize>96) settings.headFontSize=96;
+          }
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("Pattern font");
+          ImGui::TableNextColumn();
+          ImGui::Combo("##PatFont",&settings.patFont,patFonts,7);
+          if (settings.patFont==6) {
+            ImGui::InputText("##PatFontPath",&settings.patFontPath);
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_FOLDER "##PatFontLoad")) {
+              openFileDialog(GUI_FILE_LOAD_PAT_FONT);
+            }
+          }
+          if (ImGui::InputInt("Size##PatFontSize",&settings.patFontSize)) {
+            if (settings.patFontSize<3) settings.patFontSize=3;
+            if (settings.patFontSize>96) settings.patFontSize=96;
+          }
+          ImGui::EndTable();
         }
-        if (ImGui::InputInt("Size##PatFontSize",&settings.patFontSize)) {
-          if (settings.patFontSize<3) settings.patFontSize=3;
-          if (settings.patFontSize>96) settings.patFontSize=96;
-        }
-        ImGui::Unindent();
 
         bool loadJapaneseB=settings.loadJapanese;
         if (ImGui::Checkbox("Display Japanese characters",&loadJapaneseB)) {
@@ -2103,6 +2258,11 @@ void FurnaceGUI::drawSettings() {
         bool capitalMenuBarB=settings.capitalMenuBar;
         if (ImGui::Checkbox("Capitalize menu bar",&capitalMenuBarB)) {
           settings.capitalMenuBar=capitalMenuBarB;
+        }
+
+        bool classicChipOptionsB=settings.classicChipOptions;
+        if (ImGui::Checkbox("Display add/configure/change/remove chip menus in File menu",&classicChipOptionsB)) {
+          settings.classicChipOptions=classicChipOptionsB;
         }
 
         // SUBSECTION ORDERS
@@ -2322,6 +2482,19 @@ void FurnaceGUI::drawSettings() {
         }
         ImGui::EndDisabled();
 
+        ImGui::Text("Instrument list icon style:");
+        ImGui::Indent();
+        if (ImGui::RadioButton("None##iis0",settings.insIconsStyle==0)) {
+          settings.insIconsStyle=0;
+        }
+        if (ImGui::RadioButton("Graphical icons##iis1",settings.insIconsStyle==1)) {
+          settings.insIconsStyle=1;
+        }
+        if (ImGui::RadioButton("Letter icons##iis2",settings.insIconsStyle==2)) {
+          settings.insIconsStyle=2;
+        }
+        ImGui::Unindent();
+
         bool insEditColorizeB=settings.insEditColorize;
         if (ImGui::Checkbox("Colorize instrument editor using instrument type",&insEditColorizeB)) {
           settings.insEditColorize=insEditColorizeB;
@@ -2339,18 +2512,22 @@ void FurnaceGUI::drawSettings() {
         if (ImGui::RadioButton("Unified##mel0",settings.macroLayout==0)) {
           settings.macroLayout=0;
         }
-        if (ImGui::RadioButton("Mobile##mel1",settings.macroLayout==1)) {
+        /*
+        if (ImGui::RadioButton("Tabs##mel1",settings.macroLayout==1)) {
           settings.macroLayout=1;
         }
+        */
         if (ImGui::RadioButton("Grid##mel2",settings.macroLayout==2)) {
           settings.macroLayout=2;
         }
         if (ImGui::RadioButton("Single (with list)##mel3",settings.macroLayout==3)) {
           settings.macroLayout=3;
         }
+        /*
         if (ImGui::RadioButton("Single (combo box)##mel4",settings.macroLayout==4)) {
           settings.macroLayout=4;
         }
+        */
         ImGui::Unindent();
 
         bool oldMacroVSliderB=settings.oldMacroVSlider;
@@ -2887,6 +3064,7 @@ void FurnaceGUI::drawSettings() {
     ImGui::SameLine();
     if (ImGui::Button("Cancel##SettingsCancel")) {
       settingsOpen=false;
+      audioEngineChanged=false;
       syncSettings();
     }
     ImGui::SameLine();
@@ -2913,6 +3091,13 @@ void FurnaceGUI::syncSettings() {
   settings.patFontSize=e->getConfInt("patFontSize",18);
   settings.iconSize=e->getConfInt("iconSize",16);
   settings.audioEngine=(e->getConfString("audioEngine","SDL")=="SDL")?1:0;
+  if (e->getConfString("audioEngine","SDL")=="JACK") {
+    settings.audioEngine=DIV_AUDIO_JACK;
+  } else if (e->getConfString("audioEngine","SDL")=="PortAudio") {
+    settings.audioEngine=DIV_AUDIO_PORTAUDIO;
+  } else {
+    settings.audioEngine=DIV_AUDIO_SDL;
+  }
   settings.audioDevice=e->getConfString("audioDevice","");
   settings.audioChans=e->getConfInt("audioChans",2);
   settings.midiInDevice=e->getConfString("midiInDevice","");
@@ -2930,6 +3115,14 @@ void FurnaceGUI::syncSettings() {
   settings.c64Core=e->getConfInt("c64Core",0);
   settings.pokeyCore=e->getConfInt("pokeyCore",1);
   settings.opnCore=e->getConfInt("opnCore",1);
+  settings.arcadeCoreRender=e->getConfInt("arcadeCoreRender",1);
+  settings.ym2612CoreRender=e->getConfInt("ym2612CoreRender",0);
+  settings.snCoreRender=e->getConfInt("snCoreRender",0);
+  settings.nesCoreRender=e->getConfInt("nesCoreRender",0);
+  settings.fdsCoreRender=e->getConfInt("fdsCoreRender",1);
+  settings.c64CoreRender=e->getConfInt("c64CoreRender",1);
+  settings.pokeyCoreRender=e->getConfInt("pokeyCoreRender",1);
+  settings.opnCoreRender=e->getConfInt("opnCoreRender",1);
   settings.pcSpeakerOutMethod=e->getConfInt("pcSpeakerOutMethod",0);
   settings.yrw801Path=e->getConfString("yrw801Path","");
   settings.tg100Path=e->getConfString("tg100Path","");
@@ -2959,7 +3152,6 @@ void FurnaceGUI::syncSettings() {
   settings.sysSeparators=e->getConfInt("sysSeparators",1);
   settings.forceMono=e->getConfInt("forceMono",0);
   settings.controlLayout=e->getConfInt("controlLayout",3);
-  settings.restartOnFlagChange=e->getConfInt("restartOnFlagChange",1);
   settings.statusDisplay=e->getConfInt("statusDisplay",0);
   settings.dpiScale=e->getConfFloat("dpiScale",0.0f);
   settings.viewPrevPattern=e->getConfInt("viewPrevPattern",1);
@@ -3072,12 +3264,15 @@ void FurnaceGUI::syncSettings() {
   settings.insTypeMenu=e->getConfInt("insTypeMenu",1);
   settings.capitalMenuBar=e->getConfInt("capitalMenuBar",0);
   settings.centerPopup=e->getConfInt("centerPopup",1);
+  settings.insIconsStyle=e->getConfInt("insIconsStyle",1);
+  settings.classicChipOptions=e->getConfInt("classicChipOptions",0);
+  settings.wasapiEx=e->getConfInt("wasapiEx",0);
 
   clampSetting(settings.mainFontSize,2,96);
   clampSetting(settings.headFontSize,2,96);
   clampSetting(settings.patFontSize,2,96);
   clampSetting(settings.iconSize,2,48);
-  clampSetting(settings.audioEngine,0,1);
+  clampSetting(settings.audioEngine,0,2);
   clampSetting(settings.audioQuality,0,1);
   clampSetting(settings.audioBufSize,32,4096);
   clampSetting(settings.audioRate,8000,384000);
@@ -3090,6 +3285,14 @@ void FurnaceGUI::syncSettings() {
   clampSetting(settings.c64Core,0,2);
   clampSetting(settings.pokeyCore,0,1);
   clampSetting(settings.opnCore,0,1);
+  clampSetting(settings.arcadeCoreRender,0,1);
+  clampSetting(settings.ym2612CoreRender,0,1);
+  clampSetting(settings.snCoreRender,0,1);
+  clampSetting(settings.nesCoreRender,0,1);
+  clampSetting(settings.fdsCoreRender,0,1);
+  clampSetting(settings.c64CoreRender,0,2);
+  clampSetting(settings.pokeyCoreRender,0,1);
+  clampSetting(settings.opnCoreRender,0,1);
   clampSetting(settings.pcSpeakerOutMethod,0,4);
   clampSetting(settings.mainFont,0,6);
   clampSetting(settings.patFont,0,6);
@@ -3201,7 +3404,7 @@ void FurnaceGUI::syncSettings() {
   clampSetting(settings.pullDeleteRow,0,1);
   clampSetting(settings.newSongBehavior,0,1);
   clampSetting(settings.memUsageUnit,0,1);
-  clampSetting(settings.cursorFollowsWheel,0,1);
+  clampSetting(settings.cursorFollowsWheel,0,2);
   clampSetting(settings.noDMFCompat,0,1);
   clampSetting(settings.removeInsOff,0,1);
   clampSetting(settings.removeVolOff,0,1);
@@ -3209,6 +3412,9 @@ void FurnaceGUI::syncSettings() {
   clampSetting(settings.insTypeMenu,0,1);
   clampSetting(settings.capitalMenuBar,0,1);
   clampSetting(settings.centerPopup,0,1);
+  clampSetting(settings.insIconsStyle,0,2);
+  clampSetting(settings.classicChipOptions,0,1);
+  clampSetting(settings.wasapiEx,0,1);
 
   if (settings.exportLoops<0.0) settings.exportLoops=0.0;
   if (settings.exportFadeOut<0.0) settings.exportFadeOut=0.0;
@@ -3278,7 +3484,15 @@ void FurnaceGUI::commitSettings() {
     settings.fdsCore!=e->getConfInt("fdsCore",0) ||
     settings.c64Core!=e->getConfInt("c64Core",0) ||
     settings.pokeyCore!=e->getConfInt("pokeyCore",1) ||
-    settings.opnCore!=e->getConfInt("opnCore",1)
+    settings.opnCore!=e->getConfInt("opnCore",1) ||
+    settings.arcadeCoreRender!=e->getConfInt("arcadeCoreRender",0) ||
+    settings.ym2612CoreRender!=e->getConfInt("ym2612CoreRender",0) ||
+    settings.snCoreRender!=e->getConfInt("snCoreRender",0) ||
+    settings.nesCoreRender!=e->getConfInt("nesCoreRender",0) ||
+    settings.fdsCoreRender!=e->getConfInt("fdsCoreRender",0) ||
+    settings.c64CoreRender!=e->getConfInt("c64CoreRender",0) ||
+    settings.pokeyCoreRender!=e->getConfInt("pokeyCoreRender",1) ||
+    settings.opnCoreRender!=e->getConfInt("opnCoreRender",1)
   );
 
   e->setConf("mainFontSize",settings.mainFontSize);
@@ -3303,6 +3517,14 @@ void FurnaceGUI::commitSettings() {
   e->setConf("c64Core",settings.c64Core);
   e->setConf("pokeyCore",settings.pokeyCore);
   e->setConf("opnCore",settings.opnCore);
+  e->setConf("arcadeCoreRender",settings.arcadeCoreRender);
+  e->setConf("ym2612CoreRender",settings.ym2612CoreRender);
+  e->setConf("snCoreRender",settings.snCoreRender);
+  e->setConf("nesCoreRender",settings.nesCoreRender);
+  e->setConf("fdsCoreRender",settings.fdsCoreRender);
+  e->setConf("c64CoreRender",settings.c64CoreRender);
+  e->setConf("pokeyCoreRender",settings.pokeyCoreRender);
+  e->setConf("opnCoreRender",settings.opnCoreRender);
   e->setConf("pcSpeakerOutMethod",settings.pcSpeakerOutMethod);
   e->setConf("yrw801Path",settings.yrw801Path);
   e->setConf("tg100Path",settings.tg100Path);
@@ -3332,7 +3554,6 @@ void FurnaceGUI::commitSettings() {
   e->setConf("sysSeparators",settings.sysSeparators);
   e->setConf("forceMono",settings.forceMono);
   e->setConf("controlLayout",settings.controlLayout);
-  e->setConf("restartOnFlagChange",settings.restartOnFlagChange);
   e->setConf("statusDisplay",settings.statusDisplay);
   e->setConf("dpiScale",settings.dpiScale);
   e->setConf("viewPrevPattern",settings.viewPrevPattern);
@@ -3446,6 +3667,9 @@ void FurnaceGUI::commitSettings() {
   e->setConf("insTypeMenu",settings.insTypeMenu);
   e->setConf("capitalMenuBar",settings.capitalMenuBar);
   e->setConf("centerPopup",settings.centerPopup);
+  e->setConf("insIconsStyle",settings.insIconsStyle);
+  e->setConf("classicChipOptions",settings.classicChipOptions);
+  e->setConf("wasapiEx",settings.wasapiEx);
 
   // colors
   for (int i=0; i<GUI_COLOR_MAX; i++) {
@@ -3503,6 +3727,8 @@ void FurnaceGUI::commitSettings() {
   } else {
     rend->createFontsTexture();
   }
+
+  audioEngineChanged=false;
 }
 
 bool FurnaceGUI::importColors(String path) {
@@ -3717,7 +3943,7 @@ void FurnaceGUI::resetColors() {
 }
 
 void FurnaceGUI::resetKeybinds() {
-  for (int i=0; i<GUI_COLOR_MAX; i++) {
+  for (int i=0; i<GUI_ACTION_MAX; i++) {
     if (guiActions[i].defaultBind==-1) continue;
     actionKeys[i]=guiActions[i].defaultBind;
   }
@@ -3945,7 +4171,22 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
   setupLabel(settings.emptyLabel.c_str(),emptyLabel,3);
   setupLabel(settings.emptyLabel2.c_str(),emptyLabel2,2);
 
-  if (settings.dpiScale>=0.5f) dpiScale=settings.dpiScale;
+  if (updateFonts) {
+    // get scale factor
+    const char* videoBackend=SDL_GetCurrentVideoDriver();
+    if (settings.dpiScale>=0.5f) {
+      logD("setting UI scale factor from config (%f).",settings.dpiScale);
+      dpiScale=settings.dpiScale;
+    } else {
+      logD("auto-detecting UI scale factor.");
+      dpiScale=getScaleFactor(videoBackend,sdlWin);
+      logD("scale factor: %f",dpiScale);
+      if (dpiScale<0.1f) {
+        logW("scale what?");
+        dpiScale=1.0f;
+      }
+    }
+  }
 
   // colors
   if (updateFonts) {
@@ -4125,6 +4366,23 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
     ImFontGlyphRangesBuilder range;
     ImVector<ImWchar> outRange;
 
+    ImFontConfig fontConf;
+    ImFontConfig fontConfP;
+    ImFontConfig fontConfB;
+    ImFontConfig fontConfH;
+
+    fontConf.OversampleV=1;
+    fontConf.OversampleH=2;
+    fontConfP.OversampleV=1;
+    fontConfP.OversampleH=2;
+    fontConfB.OversampleV=1;
+    fontConfB.OversampleH=1;
+    fontConfH.OversampleV=1;
+    fontConfH.OversampleH=1;
+
+    //fontConf.RasterizerMultiply=1.5;
+    //fontConfP.RasterizerMultiply=1.5;
+
     range.AddRanges(upTo800);
     if (settings.loadJapanese) {
       range.AddRanges(ImGui::GetIO().Fonts->GetGlyphRangesJapanese());
@@ -4168,23 +4426,26 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
 
     ImFontConfig fc1;
     fc1.MergeMode=true;
+    // save memory
+    fc1.OversampleH=1;
+    fc1.OversampleV=1;
 
     if (settings.mainFont==6) { // custom font
-      if ((mainFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(settings.mainFontPath.c_str(),MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),NULL,fontRange))==NULL) {
+      if ((mainFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(settings.mainFontPath.c_str(),MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),&fontConf,fontRange))==NULL) {
         logW("could not load UI font! reverting to default font");
         settings.mainFont=0;
-        if ((mainFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.mainFont],builtinFontLen[settings.mainFont],MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),NULL,fontRange))==NULL) {
+        if ((mainFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.mainFont],builtinFontLen[settings.mainFont],MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),&fontConf,fontRange))==NULL) {
           logE("could not load UI font! falling back to Proggy Clean.");
           mainFont=ImGui::GetIO().Fonts->AddFontDefault();
         }
       }
     } else if (settings.mainFont==5) { // system font
-      if ((mainFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_FONT_PATH_1,MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),NULL,fontRange))==NULL) {
-        if ((mainFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_FONT_PATH_2,MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),NULL,fontRange))==NULL) {
-          if ((mainFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_FONT_PATH_3,MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),NULL,fontRange))==NULL) {
+      if ((mainFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_FONT_PATH_1,MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),&fontConf,fontRange))==NULL) {
+        if ((mainFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_FONT_PATH_2,MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),&fontConf,fontRange))==NULL) {
+          if ((mainFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_FONT_PATH_3,MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),&fontConf,fontRange))==NULL) {
             logW("could not load UI font! reverting to default font");
             settings.mainFont=0;
-            if ((mainFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.mainFont],builtinFontLen[settings.mainFont],MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),NULL,fontRange))==NULL) {
+            if ((mainFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.mainFont],builtinFontLen[settings.mainFont],MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),&fontConf,fontRange))==NULL) {
               logE("could not load UI font! falling back to Proggy Clean.");
               mainFont=ImGui::GetIO().Fonts->AddFontDefault();
             }
@@ -4192,7 +4453,7 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
         }
       }
     } else {
-      if ((mainFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.mainFont],builtinFontLen[settings.mainFont],MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),NULL,fontRange))==NULL) {
+      if ((mainFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.mainFont],builtinFontLen[settings.mainFont],MAX(1,e->getConfInt("mainFontSize",18)*dpiScale),&fontConf,fontRange))==NULL) {
         logE("could not load UI font! falling back to Proggy Clean.");
         mainFont=ImGui::GetIO().Fonts->AddFontDefault();
       }
@@ -4204,10 +4465,18 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
 
     ImFontConfig fc;
     fc.MergeMode=true;
+    fc.OversampleH=1;
+    fc.OversampleV=1;
+    fc.PixelSnapH=true;
     fc.GlyphMinAdvanceX=e->getConfInt("iconSize",16)*dpiScale;
     static const ImWchar fontRangeIcon[]={ICON_MIN_FA,ICON_MAX_FA,0};
     if ((iconFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(iconFont_compressed_data,iconFont_compressed_size,MAX(1,e->getConfInt("iconSize",16)*dpiScale),&fc,fontRangeIcon))==NULL) {
       logE("could not load icon font!");
+    }
+
+    static const ImWchar fontRangeFurIcon[]={ICON_MIN_FUR,ICON_MAX_FUR,0};
+    if ((furIconFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(furIcons_compressed_data,furIcons_compressed_size,MAX(1,e->getConfInt("iconSize",16)*dpiScale),&fc,fontRangeFurIcon))==NULL) {
+      logE("could not load Furnace icons font!");
     }
 
     if (settings.mainFontSize==settings.patFontSize && settings.patFont<5 && builtinFontM[settings.patFont]==builtinFont[settings.mainFont]) {
@@ -4215,21 +4484,21 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
       patFont=mainFont;
     } else {
       if (settings.patFont==6) { // custom font
-        if ((patFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(settings.patFontPath.c_str(),MAX(1,e->getConfInt("patFontSize",18)*dpiScale),NULL,upTo800))==NULL) {
+        if ((patFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(settings.patFontPath.c_str(),MAX(1,e->getConfInt("patFontSize",18)*dpiScale),&fontConfP,upTo800))==NULL) {
           logW("could not load pattern font! reverting to default font");
           settings.patFont=0;
-          if ((patFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFontM[settings.patFont],builtinFontMLen[settings.patFont],MAX(1,e->getConfInt("patFontSize",18)*dpiScale),NULL,upTo800))==NULL) {
+          if ((patFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFontM[settings.patFont],builtinFontMLen[settings.patFont],MAX(1,e->getConfInt("patFontSize",18)*dpiScale),&fontConfP,upTo800))==NULL) {
             logE("could not load pattern font! falling back to Proggy Clean.");
             patFont=ImGui::GetIO().Fonts->AddFontDefault();
           }
         }
       } else if (settings.patFont==5) { // system font
-        if ((patFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_PAT_FONT_PATH_1,MAX(1,e->getConfInt("patFontSize",18)*dpiScale),NULL,upTo800))==NULL) {
-          if ((patFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_PAT_FONT_PATH_2,MAX(1,e->getConfInt("patFontSize",18)*dpiScale),NULL,upTo800))==NULL) {
-            if ((patFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_PAT_FONT_PATH_3,MAX(1,e->getConfInt("patFontSize",18)*dpiScale),NULL,upTo800))==NULL) {
+        if ((patFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_PAT_FONT_PATH_1,MAX(1,e->getConfInt("patFontSize",18)*dpiScale),&fontConfP,upTo800))==NULL) {
+          if ((patFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_PAT_FONT_PATH_2,MAX(1,e->getConfInt("patFontSize",18)*dpiScale),&fontConfP,upTo800))==NULL) {
+            if ((patFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_PAT_FONT_PATH_3,MAX(1,e->getConfInt("patFontSize",18)*dpiScale),&fontConfP,upTo800))==NULL) {
               logW("could not load pattern font! reverting to default font");
               settings.patFont=0;
-              if ((patFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFontM[settings.patFont],builtinFontMLen[settings.patFont],MAX(1,e->getConfInt("patFontSize",18)*dpiScale),NULL,upTo800))==NULL) {
+              if ((patFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFontM[settings.patFont],builtinFontMLen[settings.patFont],MAX(1,e->getConfInt("patFontSize",18)*dpiScale),&fontConfP,upTo800))==NULL) {
                 logE("could not load pattern font! falling back to Proggy Clean.");
                 patFont=ImGui::GetIO().Fonts->AddFontDefault();
               }
@@ -4237,7 +4506,7 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
           }
         }
       } else {
-        if ((patFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFontM[settings.patFont],builtinFontMLen[settings.patFont],MAX(1,e->getConfInt("patFontSize",18)*dpiScale),NULL,upTo800))==NULL) {
+        if ((patFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFontM[settings.patFont],builtinFontMLen[settings.patFont],MAX(1,e->getConfInt("patFontSize",18)*dpiScale),&fontConfP,upTo800))==NULL) {
           logE("could not load pattern font!");
           patFont=ImGui::GetIO().Fonts->AddFontDefault();
         }
@@ -4247,7 +4516,7 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
     // 0x39B = Λ
     static const ImWchar bigFontRange[]={0x20,0xFF,0x39b,0x39b,0};
 
-    if ((bigFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(font_plexSans_compressed_data,font_plexSans_compressed_size,MAX(1,40*dpiScale),NULL,bigFontRange))==NULL) {
+    if ((bigFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(font_plexSans_compressed_data,font_plexSans_compressed_size,MAX(1,40*dpiScale),&fontConfB,bigFontRange))==NULL) {
       logE("could not load big UI font!");
     }
 
@@ -4256,21 +4525,21 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
       headFont=mainFont;
     } else {
       if (settings.headFont==6) { // custom font
-        if ((headFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(settings.headFontPath.c_str(),MAX(1,e->getConfInt("headFontSize",27)*dpiScale),NULL,upTo800))==NULL) {
+        if ((headFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(settings.headFontPath.c_str(),MAX(1,e->getConfInt("headFontSize",27)*dpiScale),&fontConfH,upTo800))==NULL) {
           logW("could not load header font! reverting to default font");
           settings.headFont=0;
-          if ((headFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.headFont],builtinFontLen[settings.headFont],MAX(1,e->getConfInt("headFontSize",27)*dpiScale),NULL,upTo800))==NULL) {
+          if ((headFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.headFont],builtinFontLen[settings.headFont],MAX(1,e->getConfInt("headFontSize",27)*dpiScale),&fontConfH,upTo800))==NULL) {
             logE("could not load header font! falling back to IBM Plex Sans.");
             headFont=ImGui::GetIO().Fonts->AddFontDefault();
           }
         }
       } else if (settings.headFont==5) { // system font
-        if ((headFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_HEAD_FONT_PATH_1,MAX(1,e->getConfInt("headFontSize",27)*dpiScale),NULL,upTo800))==NULL) {
-          if ((headFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_HEAD_FONT_PATH_2,MAX(1,e->getConfInt("headFontSize",27)*dpiScale),NULL,upTo800))==NULL) {
-            if ((headFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_HEAD_FONT_PATH_3,MAX(1,e->getConfInt("headFontSize",27)*dpiScale),NULL,upTo800))==NULL) {
+        if ((headFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_HEAD_FONT_PATH_1,MAX(1,e->getConfInt("headFontSize",27)*dpiScale),&fontConfH,upTo800))==NULL) {
+          if ((headFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_HEAD_FONT_PATH_2,MAX(1,e->getConfInt("headFontSize",27)*dpiScale),&fontConfH,upTo800))==NULL) {
+            if ((headFont=ImGui::GetIO().Fonts->AddFontFromFileTTF(SYSTEM_HEAD_FONT_PATH_3,MAX(1,e->getConfInt("headFontSize",27)*dpiScale),&fontConfH,upTo800))==NULL) {
               logW("could not load header font! reverting to default font");
               settings.headFont=0;
-              if ((headFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.headFont],builtinFontLen[settings.headFont],MAX(1,e->getConfInt("headFontSize",27)*dpiScale),NULL,upTo800))==NULL) {
+              if ((headFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.headFont],builtinFontLen[settings.headFont],MAX(1,e->getConfInt("headFontSize",27)*dpiScale),&fontConfH,upTo800))==NULL) {
                 logE("could not load header font! falling back to IBM Plex Sans.");
                 headFont=ImGui::GetIO().Fonts->AddFontDefault();
               }
@@ -4278,7 +4547,7 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
           }
         }
       } else {
-        if ((headFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.headFont],builtinFontLen[settings.headFont],MAX(1,e->getConfInt("headFontSize",27)*dpiScale),NULL,upTo800))==NULL) {
+        if ((headFont=ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(builtinFont[settings.headFont],builtinFontLen[settings.headFont],MAX(1,e->getConfInt("headFontSize",27)*dpiScale),&fontConfH,upTo800))==NULL) {
           logE("could not load header font!");
           headFont=ImGui::GetIO().Fonts->AddFontDefault();
         }

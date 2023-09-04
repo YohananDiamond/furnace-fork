@@ -59,6 +59,12 @@ void FurnaceGUI::drawPalette() {
   case CMDPAL_TYPE_SAMPLES:
     hint="Search samples...";
     break;
+  case CMDPAL_TYPE_INSTRUMENT_CHANGE:
+    hint="Search instruments (to change to)...";
+    break;
+  case CMDPAL_TYPE_ADD_CHIP:
+    hint="Search chip (to add)...";
+    break;
   }
 
   if (ImGui::InputTextWithHint("##CommandPaletteSearch",hint,&paletteQuery) || paletteFirstFrame) {
@@ -83,6 +89,7 @@ void FurnaceGUI::drawPalette() {
       break;
 
     case CMDPAL_TYPE_INSTRUMENTS:
+    case CMDPAL_TYPE_INSTRUMENT_CHANGE:
       if (matchFuzzy("- None -",paletteQuery.c_str())) {
         paletteSearchResults.push_back(0);
       }
@@ -95,9 +102,18 @@ void FurnaceGUI::drawPalette() {
 
     case CMDPAL_TYPE_SAMPLES:
       for (int i=0; i<e->song.sampleLen; i++) {
-        logD("ins #%x: %s", i, e->song.sample[i]->name.c_str());
         if (matchFuzzy(e->song.sample[i]->name.c_str(),paletteQuery.c_str())) {
           paletteSearchResults.push_back(i);
+        }
+      }
+      break;
+
+    case CMDPAL_TYPE_ADD_CHIP:
+      for (int i=0; availableSystems[i]; i++) {
+        int ds=availableSystems[i];
+        const char* sysname=getSystemName((DivSystem)ds);
+        if (matchFuzzy(sysname,paletteQuery.c_str())) {
+          paletteSearchResults.push_back(ds);
         }
       }
       break;
@@ -123,6 +139,15 @@ void FurnaceGUI::drawPalette() {
       navigated=true;
     }
 
+    if (paletteSearchResults.size()>0 && curPaletteChoice<0) {
+      curPaletteChoice=0;
+      navigated=true;
+    }
+    if (curPaletteChoice>=(int)paletteSearchResults.size()) {
+      curPaletteChoice=paletteSearchResults.size()-1;
+      navigated=true;
+    }
+
     for (int i=0; i<(int)paletteSearchResults.size(); i++) {
       bool current=(i==curPaletteChoice);
       int id=paletteSearchResults[i];
@@ -136,6 +161,7 @@ void FurnaceGUI::drawPalette() {
         s=recentFile.at(id).c_str();
         break;
       case CMDPAL_TYPE_INSTRUMENTS:
+      case CMDPAL_TYPE_INSTRUMENT_CHANGE:
         if (id==0) {
           s="- None -";
         } else {
@@ -144,6 +170,9 @@ void FurnaceGUI::drawPalette() {
         break;
       case CMDPAL_TYPE_SAMPLES:
         s=e->song.sample[id]->name.c_str();
+        break;
+      case CMDPAL_TYPE_ADD_CHIP:
+        s=getSystemName((DivSystem)id);
         break;
       default:
         logE("invalid command palette type");
@@ -192,6 +221,25 @@ void FurnaceGUI::drawPalette() {
 
       case CMDPAL_TYPE_SAMPLES:
         curSample=i;
+        break;
+
+      case CMDPAL_TYPE_INSTRUMENT_CHANGE:
+        doChangeIns(i-1);
+        break;
+
+      case CMDPAL_TYPE_ADD_CHIP:
+        if (i!=DIV_SYSTEM_NULL) {
+          if (!e->addSystem((DivSystem)i)) {
+            showError("cannot add chip! ("+e->getLastError()+")");
+          } else {
+            MARK_MODIFIED;
+          }
+          ImGui::CloseCurrentPopup();
+          if (e->song.autoSystem) {
+            autoDetectSystem();
+          }
+          updateWindowTitle();
+        }
         break;
 
       default:

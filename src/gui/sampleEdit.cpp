@@ -24,6 +24,7 @@
 #include <math.h>
 #include "../ta-log.h"
 #include "IconsFontAwesome4.h"
+#include "furIcons.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include <fmt/printf.h>
 #include "guiConst.h"
@@ -48,6 +49,27 @@ const double timeMultipliers[13]={
     if (!_x.empty()) _x+='\n'; \
     _x+=_text; \
   }
+
+#define MAX_RATE(_name,_x) \
+   if (e->isPreviewingSample()) { \
+     if ((int)e->getSamplePreviewRate()>(int)(_x)) { \
+       SAMPLE_WARN(warnRate,fmt::sprintf("%s: maximum sample rate is %d",_name,(int)(_x))); \
+     } \
+   }
+
+#define MIN_RATE(_name,_x) \
+   if (e->isPreviewingSample()) { \
+     if ((int)e->getSamplePreviewRate()<(int)(_x)) { \
+       SAMPLE_WARN(warnRate,fmt::sprintf("%s: minimum sample rate is %d",_name,(int)(_x))); \
+     } \
+   }
+
+#define EXACT_RATE(_name,_x) \
+   if (e->isPreviewingSample()) { \
+     if ((int)e->getSamplePreviewRate()!=(int)(_x)) { \
+       SAMPLE_WARN(warnRate,fmt::sprintf("%s: sample rate must be %d",_name,(int)(_x))); \
+     } \
+   }
 
 void FurnaceGUI::drawSampleEdit() {
   if (nextWindow==GUI_WINDOW_SAMPLE_EDIT) {
@@ -173,7 +195,7 @@ void FurnaceGUI::drawSampleEdit() {
       ImGui::Separator();
 
       String warnLoop, warnLoopMode, warnLoopPos;
-      String warnLength;
+      String warnLength, warnRate;
 
       bool isChipVisible[DIV_MAX_CHIPS];
       bool isTypeVisible[DIV_MAX_SAMPLE_TYPE];
@@ -185,6 +207,8 @@ void FurnaceGUI::drawSampleEdit() {
       memset(isMemWarning,0,DIV_MAX_CHIPS*DIV_MAX_SAMPLE_TYPE*sizeof(bool));
 
       for (int i=0; i<e->song.systemLen; i++) {
+        DivDispatch* dispatch=e->getDispatch(i);
+
         // warnings
         switch (e->song.system[i]) {
           case DIV_SYSTEM_SNES:
@@ -192,6 +216,9 @@ void FurnaceGUI::drawSampleEdit() {
               if (sample->loopStart&15 || sample->loopEnd&15) {
                 SAMPLE_WARN(warnLoopPos,"SNES: loop must be a multiple of 16");
               }
+            }
+            if (dispatch!=NULL) {
+              MAX_RATE("SNES",dispatch->chipClock/8.0);
             }
             break;
           case DIV_SYSTEM_QSOUND:
@@ -226,6 +253,9 @@ void FurnaceGUI::drawSampleEdit() {
             if (sample->loop) {
               SAMPLE_WARN(warnLoop,"GA20: samples can't loop");
             }
+            if (dispatch!=NULL) {
+              MIN_RATE("GA20",dispatch->chipClock/1024);
+            }
             break;
           case DIV_SYSTEM_YM2608:
           case DIV_SYSTEM_YM2608_EXT:
@@ -250,6 +280,9 @@ void FurnaceGUI::drawSampleEdit() {
             if (sample->samples>2097152) {
               SAMPLE_WARN(warnLength,"YM2610: maximum ADPCM-A sample length is 2097152");
             }
+            if (dispatch!=NULL) {
+              EXACT_RATE("YM2610 (ADPCM-A)",dispatch->chipClock/432);
+            }
             break;
           case DIV_SYSTEM_AMIGA:
             if (sample->loop) {
@@ -260,11 +293,17 @@ void FurnaceGUI::drawSampleEdit() {
             if (sample->samples>131070) {
               SAMPLE_WARN(warnLength,"Amiga: maximum sample length is 131070");
             }
+            if (dispatch!=NULL) {
+              MAX_RATE("Amiga",31250.0);
+            }
             break;
           case DIV_SYSTEM_SEGAPCM:
           case DIV_SYSTEM_SEGAPCM_COMPAT:
             if (sample->samples>65280) {
               SAMPLE_WARN(warnLength,"SegaPCM: maximum sample length is 65280");
+            }
+            if (dispatch!=NULL) {
+              MAX_RATE("SegaPCM",dispatch->chipClock/256);
             }
             break;
           case DIV_SYSTEM_K053260:
@@ -281,6 +320,22 @@ void FurnaceGUI::drawSampleEdit() {
             if (sample->samples>65535) {
               SAMPLE_WARN(warnLength,"C140: maximum sample length is 65535");
             }
+            if (dispatch!=NULL) {
+              MAX_RATE("C140",dispatch->rate);
+            }
+            break;
+          case DIV_SYSTEM_C219:
+            if (sample->loop) {
+              if (sample->loopStart&1 || sample->loopEnd&1) {
+                SAMPLE_WARN(warnLoopPos,"C219: loop must be a multiple of 2");
+              }
+            }
+            if (sample->samples>131072) {
+              SAMPLE_WARN(warnLength,"C219: maximum sample length is 131072");
+            }
+            if (dispatch!=NULL) {
+              MAX_RATE("C219",dispatch->rate);
+            }
             break;
           default:
             break;
@@ -296,7 +351,6 @@ void FurnaceGUI::drawSampleEdit() {
         }
 
         // chips grid
-        DivDispatch* dispatch=e->getDispatch(i);
         if (dispatch==NULL) continue;
 
         for (int j=0; j<DIV_MAX_SAMPLE_TYPE; j++) {
@@ -750,7 +804,7 @@ void FurnaceGUI::drawSampleEdit() {
       sameLineMaybe();
       ImGui::Dummy(ImVec2(4.0*dpiScale,dpiScale));
       sameLineMaybe();
-      ImGui::Button(ICON_FA_ARROWS_H "##SResize");
+      ImGui::Button(ICON_FUR_SAMPLE_RESIZE "##SResize");
       if (ImGui::IsItemClicked()) {
         resizeSize=sample->samples;
       }
@@ -785,7 +839,7 @@ void FurnaceGUI::drawSampleEdit() {
         resizeSize=sample->samples;
       }
       sameLineMaybe();
-      ImGui::Button(ICON_FA_EXPAND "##SResample");
+      ImGui::Button(ICON_FUR_SAMPLE_RESAMPLE "##SResample");
       if (ImGui::IsItemClicked()) {
         resampleTarget=targetRate;
       }
@@ -906,28 +960,28 @@ void FurnaceGUI::drawSampleEdit() {
         ImGui::EndPopup();
       }
       sameLineMaybe();
-      if (ImGui::Button(ICON_FA_ARROWS_V "##SNormalize")) {
+      if (ImGui::Button(ICON_FUR_SAMPLE_NORMALIZE "##SNormalize")) {
         doAction(GUI_ACTION_SAMPLE_NORMALIZE);
       }
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Normalize");
       }
       sameLineMaybe();
-      if (ImGui::Button(ICON_FA_ARROW_UP "##SFadeIn")) {
+      if (ImGui::Button(ICON_FUR_SAMPLE_FADEIN "##SFadeIn")) {
         doAction(GUI_ACTION_SAMPLE_FADE_IN);
       }
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Fade in");
       }
       sameLineMaybe();
-      if (ImGui::Button(ICON_FA_ARROW_DOWN "##SFadeOut")) {
+      if (ImGui::Button(ICON_FUR_SAMPLE_FADEOUT "##SFadeOut")) {
         doAction(GUI_ACTION_SAMPLE_FADE_OUT);
       }
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Fade out");
       }
       sameLineMaybe();
-      ImGui::Button(ICON_FA_ADJUST "##SInsertSilence");
+      ImGui::Button(ICON_FUR_SAMPLE_INSERT_SILENCE "##SInsertSilence");
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Insert silence");
       }
@@ -958,7 +1012,7 @@ void FurnaceGUI::drawSampleEdit() {
         ImGui::EndPopup();
       }
       sameLineMaybe();
-      if (ImGui::Button(ICON_FA_ERASER "##SSilence")) {
+      if (ImGui::Button(ICON_FUR_SAMPLE_APPLY_SILENCE "##SSilence")) {
         doAction(GUI_ACTION_SAMPLE_SILENCE);
       }
       if (ImGui::IsItemHovered()) {
@@ -981,28 +1035,28 @@ void FurnaceGUI::drawSampleEdit() {
       ImGui::SameLine();
       ImGui::Dummy(ImVec2(4.0*dpiScale,dpiScale));
       sameLineMaybe();
-      if (ImGui::Button(ICON_FA_BACKWARD "##SReverse")) {
+      if (ImGui::Button(ICON_FUR_SAMPLE_REVERSE "##SReverse")) {
         doAction(GUI_ACTION_SAMPLE_REVERSE);
       }
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Reverse");
       }
       sameLineMaybe();
-      if (ImGui::Button(ICON_FA_SORT_AMOUNT_ASC "##SInvert")) {
+      if (ImGui::Button(ICON_FUR_SAMPLE_INVERT "##SInvert")) {
         doAction(GUI_ACTION_SAMPLE_INVERT);
       }
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Invert");
       }
       sameLineMaybe();
-      if (ImGui::Button(ICON_FA_LEVEL_DOWN "##SSign")) {
+      if (ImGui::Button(ICON_FUR_SAMPLE_SIGN "##SSign")) {
         doAction(GUI_ACTION_SAMPLE_SIGN);
       }
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Signed/unsigned exchange");
       }
       sameLineMaybe();
-      ImGui::Button(ICON_FA_INDUSTRY "##SFilter");
+      ImGui::Button(ICON_FUR_SAMPLE_FILTER "##SFilter");
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Apply filter");
       }
@@ -1143,6 +1197,7 @@ void FurnaceGUI::drawSampleEdit() {
       sameLineMaybe(ImGui::CalcTextSize("Zoom").x+150.0f*dpiScale+ImGui::CalcTextSize("100%").x);
       double zoomPercent=100.0/sampleZoom;
       bool checkZoomLimit=false;
+      ImGui::AlignTextToFramePadding();
       ImGui::Text("Zoom");
       ImGui::SameLine();
       ImGui::SetNextItemWidth(150.0f*dpiScale);
@@ -1756,7 +1811,16 @@ void FurnaceGUI::drawSampleEdit() {
           ImGui::TableNextColumn();
           ImGui::TextUnformatted(statusBar.c_str());
           ImGui::TableNextColumn();
-          ImGui::TextUnformatted(statusBar2.c_str());
+          if (!warnRate.empty()) {
+            ImGui::PushStyleColor(ImGuiCol_Text,uiColors[GUI_COLOR_WARNING]);
+            ImGui::TextUnformatted(statusBar2.c_str());
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) {
+              ImGui::SetTooltip("%s",warnRate.c_str());
+            }
+          } else {
+            ImGui::TextUnformatted(statusBar2.c_str());
+          }
           ImGui::TableNextColumn();
           if (!warnLength.empty()) {
             ImGui::PushStyleColor(ImGuiCol_Text,uiColors[GUI_COLOR_WARNING]);
