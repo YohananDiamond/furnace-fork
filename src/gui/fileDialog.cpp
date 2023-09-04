@@ -267,12 +267,9 @@ bool FurnaceGUIFileDialog::openSave(String header, std::vector<String> filter, S
   } else {
     hasError=false;
 
-<<<<<<< HEAD
     ImGuiFileDialog::Instance()->DeserializeBookmarks(bookmarks);
-=======
     convertFilterList(filter);
 
->>>>>>> command-palette
     ImGuiFileDialog::Instance()->singleClickSel=false;
     ImGuiFileDialog::Instance()->DpiScale=dpiScale;
     ImGuiFileDialog::Instance()->mobileMode=mobileUI;
