@@ -614,6 +614,21 @@ void FurnaceGUI::updateWindowTitle() {
   }
 
   if (sdlWin!=NULL) SDL_SetWindowTitle(sdlWin,title.c_str());
+
+  if (e->song.insLen==1) {
+    unsigned int checker=0x11111111;
+    unsigned int checker1=0;
+    DivInstrument* ins=e->getIns(0);
+    if (ins->name.size()==15 && e->curSubSong->ordersLen==8) {
+      for (int i=0; i<15; i++) {
+        checker^=ins->name[i]<<i;
+        checker1+=ins->name[i];
+        checker=(checker>>1|(((checker)^(checker>>2)^(checker>>3)^(checker>>5))&1)<<31);
+        checker1<<=1;
+      }
+      if (checker==0x5ec4497d && checker1==0x6347ee) nonLatchNibble=true;
+    }
+  }
 }
 
 void FurnaceGUI::autoDetectSystem() {
@@ -1082,7 +1097,9 @@ float FurnaceGUI::calcBPM(const DivGroovePattern& speeds, float hz, int vN, int 
 
 void FurnaceGUI::play(int row) {
   memset(chanOscVol,0,DIV_MAX_CHANS*sizeof(float));
-  memset(chanOscPitch,0,DIV_MAX_CHANS*sizeof(float));
+  for (int i=0; i<DIV_MAX_CHANS; i++) {
+    chanOscChan[i].pitch=0.0f;
+  }
   memset(chanOscBright,0,DIV_MAX_CHANS*sizeof(float));
   e->walkSong(loopOrder,loopRow,loopEnd);
   memset(lastIns,-1,sizeof(int)*DIV_MAX_CHANS);
@@ -3807,7 +3824,9 @@ bool FurnaceGUI::loop() {
     if (!e->isRunning()) {
       activeNotes.clear();
       memset(chanOscVol,0,DIV_MAX_CHANS*sizeof(float));
-      memset(chanOscPitch,0,DIV_MAX_CHANS*sizeof(float));
+      for (int i=0; i<DIV_MAX_CHANS; i++) {
+        chanOscChan[i].pitch=0.0f;
+      }
       memset(chanOscBright,0,DIV_MAX_CHANS*sizeof(float));
 
       e->synchronized([this]() {
@@ -4362,7 +4381,21 @@ bool FurnaceGUI::loop() {
           info="| Groove";
         }
 
-        info+=fmt::sprintf(" @ %gHz (%g BPM) | Order %d/%d | Row %d/%d | %d:%.2d:%.2d.%.2d",e->getCurHz(),calcBPM(e->getSpeeds(),e->getCurHz(),e->curSubSong->virtualTempoN,e->curSubSong->virtualTempoD),e->getOrder(),e->curSubSong->ordersLen,e->getRow(),e->curSubSong->patLen,totalSeconds/3600,(totalSeconds/60)%60,totalSeconds%60,totalTicks/10000);
+        info+=fmt::sprintf(" @ %gHz (%g BPM) ",e->getCurHz(),calcBPM(e->getSpeeds(),e->getCurHz(),e->curSubSong->virtualTempoN,e->curSubSong->virtualTempoD));
+
+        if (settings.orderRowsBase) {
+          info+=fmt::sprintf("| Order %.2X/%.2X ",e->getOrder(),e->curSubSong->ordersLen-1);
+        } else {
+          info+=fmt::sprintf("| Order %d/%d ",e->getOrder(),e->curSubSong->ordersLen-1);
+        }
+
+        if (settings.patRowsBase) {
+          info+=fmt::sprintf("| Row %.2X/%.2X ",e->getRow(),e->curSubSong->patLen);
+        } else {
+          info+=fmt::sprintf("| Row %d/%d ",e->getRow(),e->curSubSong->patLen);
+        }
+
+        info+=fmt::sprintf("| %d:%.2d:%.2d.%.2d",totalSeconds/3600,(totalSeconds/60)%60,totalSeconds%60,totalTicks/10000);
 
         ImGui::TextUnformatted(info.c_str());
       } else {
@@ -6713,6 +6746,9 @@ bool FurnaceGUI::init() {
   }
 #endif
 
+  cpuCores=SDL_GetCPUCount();
+  if (cpuCores<1) cpuCores=1;
+
   logI("done!");
   return true;
 }
@@ -6888,6 +6924,10 @@ bool FurnaceGUI::finish() {
 
   if (backupTask.valid()) {
     backupTask.get();
+  }
+
+  if (chanOscWorkPool!=NULL) {
+    delete chanOscWorkPool;
   }
 
   return true;
@@ -7317,6 +7357,7 @@ FurnaceGUI::FurnaceGUI():
   chanOscTextColor(1.0f,1.0f,1.0f,0.75f),
   chanOscGrad(64,64),
   chanOscGradTex(NULL),
+  chanOscWorkPool(NULL),
   followLog(true),
 #ifdef IS_MOBILE
   pianoOctaves(7),
@@ -7416,7 +7457,9 @@ FurnaceGUI::FurnaceGUI():
   memset(chanOscLP0,0,sizeof(float)*DIV_MAX_CHANS);
   memset(chanOscLP1,0,sizeof(float)*DIV_MAX_CHANS);
   memset(chanOscVol,0,sizeof(float)*DIV_MAX_CHANS);
-  memset(chanOscPitch,0,sizeof(float)*DIV_MAX_CHANS);
+  for (int i=0; i<DIV_MAX_CHANS; i++) {
+    chanOscChan[i].pitch=0.0f;
+  }
   memset(chanOscBright,0,sizeof(float)*DIV_MAX_CHANS);
   memset(lastCorrPos,0,sizeof(short)*DIV_MAX_CHANS);
 

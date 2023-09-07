@@ -211,7 +211,7 @@ endif()
 if (WITH_PORTAUDIO)
   if (SYSTEM_PORTAUDIO)
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(PORTAUDIO REQUIRED portaudio)
+    pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
     list(APPEND DEPENDENCIES_INCLUDE_DIRS ${PORTAUDIO_INCLUDE_DIRS})
     list(APPEND DEPENDENCIES_COMPILE_OPTIONS ${PORTAUDIO_CFLAGS_OTHER})
     list(APPEND DEPENDENCIES_LIBRARIES ${PORTAUDIO_LIBRARIES})
@@ -550,6 +550,7 @@ src/engine/blip_buf.c
 src/engine/brrUtils.c
 src/engine/safeReader.cpp
 src/engine/safeWriter.cpp
+src/engine/workPool.cpp
 src/engine/cmdStream.cpp
 src/engine/cmdStreamOps.cpp
 src/engine/config.cpp
