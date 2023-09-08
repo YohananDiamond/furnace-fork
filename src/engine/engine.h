@@ -58,8 +58,8 @@ class DivWorkPool;
 
 #define DIV_UNSTABLE
 
-#define DIV_VERSION "0.6pre10"
-#define DIV_ENGINE_VERSION 171
+#define DIV_VERSION "0.6pre11"
+#define DIV_ENGINE_VERSION 172
 // for imports
 #define DIV_VERSION_MOD 0xff01
 #define DIV_VERSION_FC 0xff02
@@ -889,6 +889,7 @@ class DivEngine {
 
     // delete instrument
     void delInstrument(int index);
+    void delInstrumentUnsafe(int index);
 
     // add wavetable
     int addWave();
@@ -901,6 +902,7 @@ class DivEngine {
 
     // delete wavetable
     void delWave(int index);
+    void delWaveUnsafe(int index);
 
     // add sample
     int addSample();
@@ -916,6 +918,7 @@ class DivEngine {
 
     // delete sample
     void delSample(int index);
+    void delSampleUnsafe(int index, bool render=true);
 
     // add order
     void addOrder(int pos, bool duplicate, bool where);
@@ -1064,10 +1067,14 @@ class DivEngine {
     unsigned int getSampleFormatMask();
 
     // UNSAFE render samples - only execute when locked
-    void renderSamples();
+    void renderSamples(int whichSample=-1);
 
     // public render samples
-    void renderSamplesP();
+    // values for whichSample
+    // -2: don't render anything - just update chip sample memory
+    // -1: render all samples
+    // >=0: render specific sample
+    void renderSamplesP(int whichSample=-1);
 
     // public swap channels
     void swapChannelsP(int src, int dest);
@@ -1090,6 +1097,11 @@ class DivEngine {
 
     // clear all subsong data
     void clearSubSongs();
+
+    // optimize assets
+    void delUnusedIns();
+    void delUnusedWaves();
+    void delUnusedSamples();
 
     // change system
     void changeSystem(int index, DivSystem which, bool preserveOrder=true);
