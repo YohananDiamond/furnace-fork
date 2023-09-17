@@ -37,7 +37,7 @@
 #include <mutex>
 #include <map>
 #include <unordered_map>
-#include <deque>
+#include "../fixedQueue.h"
 
 class DivWorkPool;
 
@@ -58,8 +58,8 @@ class DivWorkPool;
 
 #define DIV_UNSTABLE
 
-#define DIV_VERSION "0.6pre11"
-#define DIV_ENGINE_VERSION 172
+#define DIV_VERSION "0.6pre16"
+#define DIV_ENGINE_VERSION 178
 // for imports
 #define DIV_VERSION_MOD 0xff01
 #define DIV_VERSION_FC 0xff02
@@ -176,14 +176,28 @@ struct DivChannelState {
 };
 
 struct DivNoteEvent {
-  int channel, ins, note, volume;
-  bool on;
+  signed char channel;
+  unsigned char ins;
+  signed char note, volume;
+  bool on, nop, pad1, pad2;
   DivNoteEvent(int c, int i, int n, int v, bool o):
     channel(c),
     ins(i),
     note(n),
     volume(v),
-    on(o) {}
+    on(o),
+    nop(false),
+    pad1(false),
+    pad2(false) {}
+  DivNoteEvent():
+    channel(-1),
+    ins(0),
+    note(0),
+    volume(0),
+    on(false),
+    nop(true),
+    pad1(false),
+    pad2(false) {}
 };
 
 struct DivDispatchContainer {
@@ -428,11 +442,11 @@ class DivEngine {
   DivAudioExportModes exportMode;
   double exportFadeOut;
   DivConfig conf;
-  std::deque<DivNoteEvent> pendingNotes;
+  FixedQueue<DivNoteEvent,8192> pendingNotes;
   // bitfield
   unsigned char walked[8192];
   bool isMuted[DIV_MAX_CHANS];
-  std::mutex isBusy, saveLock;
+  std::mutex isBusy, saveLock, playPosLock;
   String configPath;
   String configFile;
   String lastError;
@@ -490,6 +504,7 @@ class DivEngine {
   float metroFreq, metroPos;
   float metroAmp;
   float metroVol;
+  float previewVol;
 
   size_t totalProcessed;
 
@@ -708,11 +723,11 @@ class DivEngine {
     // find song loop position
     void walkSong(int& loopOrder, int& loopRow, int& loopEnd);
 
-    // play
-    void play();
+    // play (returns whether successful)
+    bool play();
 
-    // play to row
-    void playToRow(int row);
+    // play to row (returns whether successful)
+    bool playToRow(int row);
 
     // play by one row
     void stepOne(int row);
@@ -728,6 +743,9 @@ class DivEngine {
     int getSamplePreviewSample();
     int getSamplePreviewPos();
     double getSamplePreviewRate();
+
+    // set sample preview volume (1.0 = 100%)
+    void setSamplePreviewVol(float vol);
 
     // trigger sample preview
     void previewSample(int sample, int note=-1, int pStart=-1, int pEnd=-1);
@@ -830,6 +848,9 @@ class DivEngine {
     // get current row
     int getRow();
 
+    // synchronous get order/row
+    void getPlayPos(int& order, int& row);
+
     // get beat/bar
     int getElapsedBars();
     int getElapsedBeats();
@@ -882,7 +903,7 @@ class DivEngine {
 
     // get instrument from file
     // if the returned vector is empty then there was an error.
-    std::vector<DivInstrument*> instrumentFromFile(const char* path, bool loadAssets=true);
+    std::vector<DivInstrument*> instrumentFromFile(const char* path, bool loadAssets=true, bool readInsName=true);
 
     // load temporary instrument
     void loadTempIns(DivInstrument* which);
@@ -1282,6 +1303,7 @@ class DivEngine {
       metroPos(0),
       metroAmp(0.0f),
       metroVol(1.0f),
+      previewVol(1.0f),
       totalProcessed(0),
       renderPoolThreads(0),
       renderPool(NULL),

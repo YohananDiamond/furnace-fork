@@ -1701,7 +1701,7 @@ unsigned int DivEngine::convertPanLinearToSplit(int val, unsigned char bits, int
   return (panL<<bits)|panR;
 }
 
-void DivEngine::play() {
+bool DivEngine::play() {
   BUSY_BEGIN_SOFT;
   curOrder=prevOrder;
   sPreview.sample=-1;
@@ -1788,10 +1788,12 @@ void DivEngine::play() {
     }
     output->midiOut->send(TAMidiMessage(TA_MIDI_MACHINE_PLAY,0,0));
   }
+  bool didItPlay=playing;
   BUSY_END;
+  return didItPlay;
 }
 
-void DivEngine::playToRow(int row) {
+bool DivEngine::playToRow(int row) {
   BUSY_BEGIN_SOFT;
   sPreview.sample=-1;
   sPreview.wave=-1;
@@ -1802,7 +1804,9 @@ void DivEngine::playToRow(int row) {
   for (int i=0; i<DIV_MAX_CHANS; i++) {
     keyHit[i]=false;
   }
+  bool didItPlay=playing;
   BUSY_END;
+  return didItPlay;
 }
 
 void DivEngine::stepOne(int row) {
@@ -2160,6 +2164,13 @@ unsigned char DivEngine::getOrder() {
 
 int DivEngine::getRow() {
   return prevRow;
+}
+
+void DivEngine::getPlayPos(int& order, int& row) {
+  playPosLock.lock();
+  order=prevOrder;
+  row=prevRow;
+  playPosLock.unlock();
 }
 
 int DivEngine::getElapsedBars() {
@@ -3242,6 +3253,10 @@ void DivEngine::setMetronomeVol(float vol) {
   metroVol=vol;
 }
 
+void DivEngine::setSamplePreviewVol(float vol) {
+  previewVol=vol;
+}
+
 void DivEngine::setConsoleMode(bool enable) {
   consoleMode=enable;
 }
@@ -3389,6 +3404,7 @@ void DivEngine::quitDispatch() {
   playing=false;
   curSpeed=0;
   endOfSong=false;
+  stepPlay=0;
   ticks=0;
   tempoAccum=0;
   curRow=0;
@@ -3445,6 +3461,7 @@ bool DivEngine::initAudioBackend() {
   clampSamples=getConfInt("clampSamples",0);
   lowLatency=getConfInt("lowLatency",0);
   metroVol=(float)(getConfInt("metroVol",100))/100.0f;
+  previewVol=(float)(getConfInt("sampleVol",50))/100.0f;
   midiOutClock=getConfInt("midiOutClock",0);
   midiOutTime=getConfInt("midiOutTime",0);
   midiOutTimeRate=getConfInt("midiOutTimeRate",0);
@@ -3452,6 +3469,8 @@ bool DivEngine::initAudioBackend() {
   midiOutMode=getConfInt("midiOutMode",DIV_MIDI_MODE_NOTE);
   if (metroVol<0.0f) metroVol=0.0f;
   if (metroVol>2.0f) metroVol=2.0f;
+  if (previewVol<0.0f) previewVol=0.0f;
+  if (previewVol>1.0f) previewVol=1.0f;
   renderPoolThreads=getConfInt("renderPoolThreads",0);
 
   if (lowLatency) logI("using low latency mode.");
