@@ -30,9 +30,6 @@ const char* aboutLine[]={
   "the biggest multi-system chiptune tracker!",
   "featuring DefleMask song compatibility.",
   "",
-  "this is a version released during The Freeze.",
-  "please report any issues you find!",
-  "",
   "> CREDITS <",
   "",
   "-- program --",
@@ -129,6 +126,7 @@ const char* aboutLine[]={
   "SuperJet Spade",
   "SwapXFO",
   "TakuikaNinja",
+  "tapekeep",
   "TCORPStudios",
   "Teuthida",
   "ThaCuber",
@@ -162,6 +160,9 @@ const char* aboutLine[]={
   "powered by:",
   "Dear ImGui by Omar Cornut",
   "SDL2 by Sam Lantinga",
+#ifdef HAVE_FREETYPE
+  "FreeType",
+#endif
   "zlib by Jean-loup Gailly",
   "and Mark Adler",
   "libsndfile by Erik de Castro Lopo",

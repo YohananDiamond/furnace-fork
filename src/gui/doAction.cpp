@@ -119,6 +119,7 @@ void FurnaceGUI::doAction(int what) {
         curOctave=7;
       } else {
         e->autoNoteOffAll();
+        failedNoteOn=false;
       }
       break;
     case GUI_ACTION_OCTAVE_DOWN:
@@ -126,6 +127,7 @@ void FurnaceGUI::doAction(int what) {
         curOctave=-5;
       } else {
         e->autoNoteOffAll();
+        failedNoteOn=false;
       }
       break;
     case GUI_ACTION_INS_UP:
