@@ -3441,6 +3441,7 @@ bool FurnaceGUI::loop() {
   DECLARE_METRIC(readOsc)
   DECLARE_METRIC(osc)
   DECLARE_METRIC(chanOsc)
+  DECLARE_METRIC(xyOsc)
   DECLARE_METRIC(volMeter)
   DECLARE_METRIC(settings)
   DECLARE_METRIC(debug)
@@ -4436,6 +4437,7 @@ bool FurnaceGUI::loop() {
         if (ImGui::MenuItem("piano/input pad",BIND_FOR(GUI_ACTION_WINDOW_PIANO),pianoOpen)) pianoOpen=!pianoOpen;
         if (ImGui::MenuItem("oscilloscope (master)",BIND_FOR(GUI_ACTION_WINDOW_OSCILLOSCOPE),oscOpen)) oscOpen=!oscOpen;
         if (ImGui::MenuItem("oscilloscope (per-channel)",BIND_FOR(GUI_ACTION_WINDOW_CHAN_OSC),chanOscOpen)) chanOscOpen=!chanOscOpen;
+        if (ImGui::MenuItem("oscilloscope (X-Y)",BIND_FOR(GUI_ACTION_WINDOW_XY_OSC),xyOscOpen)) xyOscOpen=!xyOscOpen;
         if (ImGui::MenuItem("volume meter",BIND_FOR(GUI_ACTION_WINDOW_VOL_METER),volMeterOpen)) volMeterOpen=!volMeterOpen;
         if (ImGui::MenuItem("clock",BIND_FOR(GUI_ACTION_WINDOW_CLOCK),clockOpen)) clockOpen=!clockOpen;
         if (ImGui::MenuItem("register view",BIND_FOR(GUI_ACTION_WINDOW_REGISTER_VIEW),regViewOpen)) regViewOpen=!regViewOpen;
@@ -4656,6 +4658,7 @@ bool FurnaceGUI::loop() {
       MEASURE(readOsc,readOsc());
       MEASURE(osc,drawOsc());
       MEASURE(chanOsc,drawChanOsc());
+      MEASURE(xyOsc,drawXYOsc());
       MEASURE(grooves,drawGrooves());
       MEASURE(regView,drawRegView());
     } else {
@@ -4685,6 +4688,7 @@ bool FurnaceGUI::loop() {
 
       MEASURE(osc,drawOsc());
       MEASURE(chanOsc,drawChanOsc());
+      MEASURE(xyOsc,drawXYOsc());
       MEASURE(volMeter,drawVolMeter());
       MEASURE(settings,drawSettings());
       MEASURE(debug,drawDebug());
@@ -6443,6 +6447,7 @@ bool FurnaceGUI::init() {
   mixerOpen=e->getConfBool("mixerOpen",false);
   oscOpen=e->getConfBool("oscOpen",true);
   chanOscOpen=e->getConfBool("chanOscOpen",false);
+  xyOscOpen=e->getConfBool("xyOscOpen",false);
   volMeterOpen=e->getConfBool("volMeterOpen",true);
   statsOpen=e->getConfBool("statsOpen",false);
   compatFlagsOpen=e->getConfBool("compatFlagsOpen",false);
@@ -6550,6 +6555,16 @@ bool FurnaceGUI::init() {
   chanOscUseGrad=e->getConfBool("chanOscUseGrad",false);
   chanOscGrad.fromString(e->getConfString("chanOscGrad",""));
   chanOscGrad.render();
+
+  xyOscXChannel=e->getConfInt("xyOscXChannel",0);
+  xyOscXInvert=e->getConfBool("xyOscXInvert",false);
+  xyOscYChannel=e->getConfInt("xyOscYChannel",1);
+  xyOscYInvert=e->getConfBool("xyOscYInvert",false);
+  xyOscZoom=e->getConfFloat("xyOscZoom",1.0f);
+  xyOscSamples=e->getConfInt("xyOscSamples",32768);
+  xyOscDecayTime=e->getConfFloat("xyOscDecayTime",10.0f);
+  xyOscIntensity=e->getConfFloat("xyOscIntensity",2.0f);
+  xyOscThickness=e->getConfFloat("xyOscThickness",2.0f);
 
   syncSettings();
   syncTutorial();
@@ -7003,6 +7018,7 @@ void FurnaceGUI::commitState() {
   e->setConf("mixerOpen",mixerOpen);
   e->setConf("oscOpen",oscOpen);
   e->setConf("chanOscOpen",chanOscOpen);
+  e->setConf("xyOscOpen",xyOscOpen);
   e->setConf("volMeterOpen",volMeterOpen);
   e->setConf("statsOpen",statsOpen);
   e->setConf("compatFlagsOpen",compatFlagsOpen);
@@ -7096,6 +7112,17 @@ void FurnaceGUI::commitState() {
   e->setConf("chanOscTextColorA",chanOscTextColor.w);
   e->setConf("chanOscUseGrad",chanOscUseGrad);
   e->setConf("chanOscGrad",chanOscGrad.toString());
+
+  // commit x-y osc state
+  e->setConf("xyOscXChannel",xyOscXChannel);
+  e->setConf("xyOscXInvert",xyOscXInvert);
+  e->setConf("xyOscYChannel",xyOscYChannel);
+  e->setConf("xyOscYInvert",xyOscYInvert);
+  e->setConf("xyOscZoom",xyOscZoom);
+  e->setConf("xyOscSamples",xyOscSamples);
+  e->setConf("xyOscDecayTime",xyOscDecayTime);
+  e->setConf("xyOscIntensity",xyOscIntensity);
+  e->setConf("xyOscThickness",xyOscThickness);
 
   // commit recent files
   for (int i=0; i<30; i++) {
@@ -7339,6 +7366,7 @@ FurnaceGUI::FurnaceGUI():
   clockOpen(false),
   speedOpen(true),
   groovesOpen(false),
+  xyOscOpen(false),
   basicMode(true),
   shortIntro(false),
   insListDir(false),
@@ -7579,6 +7607,17 @@ FurnaceGUI::FurnaceGUI():
   chanOscGrad(64,64),
   chanOscGradTex(NULL),
   chanOscWorkPool(NULL),
+  xyOscPointTex(NULL),
+  xyOscOptions(false),
+  xyOscXChannel(0),
+  xyOscXInvert(false),
+  xyOscYChannel(1),
+  xyOscYInvert(false),
+  xyOscZoom(1.0f),
+  xyOscSamples(32768),
+  xyOscDecayTime(10.0f),
+  xyOscIntensity(2.0f),
+  xyOscThickness(2.0f),
   followLog(true),
 #ifdef IS_MOBILE
   pianoOctaves(7),

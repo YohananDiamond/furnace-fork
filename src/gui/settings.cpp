@@ -156,6 +156,18 @@ const char* opnCores[]={
   "Nuked-OPN2 (FM) + ymfm (SSG/ADPCM)"
 };
 
+const char* opl2Cores[]={
+  "Nuked-OPL3",
+  "ymfm",
+  "YM3812-LLE"
+};
+
+const char* opl3Cores[]={
+  "Nuked-OPL3",
+  "ymfm",
+  "YMF262-LLE"
+};
+
 const char* pcspkrOutMethods[]={
   "evdev SND_TONE",
   "KIOCSOUND on /dev/tty1",
@@ -1557,6 +1569,29 @@ void FurnaceGUI::drawSettings() {
           ImGui::TableNextColumn();
           ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
           if (ImGui::Combo("##OPNCoreRender",&settings.opnCoreRender,opnCores,2)) settingsChanged=true;
+
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("OPL/OPL2/Y8950");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          if (ImGui::Combo("##OPL2Core",&settings.opl2Core,opl2Cores,3)) settingsChanged=true;
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          if (ImGui::Combo("##OPL2CoreRender",&settings.opl2CoreRender,opl2Cores,3)) settingsChanged=true;
+
+          ImGui::TableNextRow();
+          ImGui::TableNextColumn();
+          ImGui::AlignTextToFramePadding();
+          ImGui::Text("OPL3");
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          if (ImGui::Combo("##OPL3Core",&settings.opl3Core,opl3Cores,3)) settingsChanged=true;
+          ImGui::TableNextColumn();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          if (ImGui::Combo("##OPL3CoreRender",&settings.opl3CoreRender,opl3Cores,3)) settingsChanged=true;
+
           ImGui::EndTable();
         }
         ImGui::Separator();
@@ -2330,6 +2365,15 @@ void FurnaceGUI::drawSettings() {
         }
         ImGui::Unindent();
 
+        // SUBSECTION ASSETS
+        CONFIG_SUBSECTION("Assets");
+
+        bool insTypeMenuB=settings.insTypeMenu;
+        if (ImGui::Checkbox("Display instrument type menu when adding instrument",&insTypeMenuB)) {
+          settings.insTypeMenu=insTypeMenuB;
+          settingsChanged=true;
+        }
+
         END_SECTION;
       }
       CONFIG_SECTION("Appearance") {
@@ -2890,12 +2934,6 @@ void FurnaceGUI::drawSettings() {
         bool insEditColorizeB=settings.insEditColorize;
         if (ImGui::Checkbox("Colorize instrument editor using instrument type",&insEditColorizeB)) {
           settings.insEditColorize=insEditColorizeB;
-          settingsChanged=true;
-        }
-
-        bool insTypeMenuB=settings.insTypeMenu;
-        if (ImGui::Checkbox("Display instrument type menu when adding instrument",&insTypeMenuB)) {
-          settings.insTypeMenu=insTypeMenuB;
           settingsChanged=true;
         }
 
@@ -3596,6 +3634,8 @@ void FurnaceGUI::syncSettings() {
   settings.c64Core=e->getConfInt("c64Core",0);
   settings.pokeyCore=e->getConfInt("pokeyCore",1);
   settings.opnCore=e->getConfInt("opnCore",1);
+  settings.opl2Core=e->getConfInt("opl2Core",0);
+  settings.opl3Core=e->getConfInt("opl3Core",0);
   settings.arcadeCoreRender=e->getConfInt("arcadeCoreRender",1);
   settings.ym2612CoreRender=e->getConfInt("ym2612CoreRender",0);
   settings.snCoreRender=e->getConfInt("snCoreRender",0);
@@ -3604,6 +3644,8 @@ void FurnaceGUI::syncSettings() {
   settings.c64CoreRender=e->getConfInt("c64CoreRender",1);
   settings.pokeyCoreRender=e->getConfInt("pokeyCoreRender",1);
   settings.opnCoreRender=e->getConfInt("opnCoreRender",1);
+  settings.opl2CoreRender=e->getConfInt("opl2CoreRender",0);
+  settings.opl3CoreRender=e->getConfInt("opl3CoreRender",0);
   settings.pcSpeakerOutMethod=e->getConfInt("pcSpeakerOutMethod",0);
   settings.yrw801Path=e->getConfString("yrw801Path","");
   settings.tg100Path=e->getConfString("tg100Path","");
@@ -3780,6 +3822,8 @@ void FurnaceGUI::syncSettings() {
   clampSetting(settings.c64Core,0,2);
   clampSetting(settings.pokeyCore,0,1);
   clampSetting(settings.opnCore,0,1);
+  clampSetting(settings.opl2Core,0,2);
+  clampSetting(settings.opl3Core,0,2);
   clampSetting(settings.arcadeCoreRender,0,1);
   clampSetting(settings.ym2612CoreRender,0,1);
   clampSetting(settings.snCoreRender,0,1);
@@ -3788,6 +3832,8 @@ void FurnaceGUI::syncSettings() {
   clampSetting(settings.c64CoreRender,0,2);
   clampSetting(settings.pokeyCoreRender,0,1);
   clampSetting(settings.opnCoreRender,0,1);
+  clampSetting(settings.opl2CoreRender,0,2);
+  clampSetting(settings.opl3CoreRender,0,2);
   clampSetting(settings.pcSpeakerOutMethod,0,4);
   clampSetting(settings.mainFont,0,6);
   clampSetting(settings.patFont,0,6);
@@ -3993,6 +4039,8 @@ void FurnaceGUI::commitSettings() {
     settings.c64Core!=e->getConfInt("c64Core",0) ||
     settings.pokeyCore!=e->getConfInt("pokeyCore",1) ||
     settings.opnCore!=e->getConfInt("opnCore",1) ||
+    settings.opl2Core!=e->getConfInt("opl2Core",0) ||
+    settings.opl3Core!=e->getConfInt("opl3Core",0) ||
     settings.arcadeCoreRender!=e->getConfInt("arcadeCoreRender",0) ||
     settings.ym2612CoreRender!=e->getConfInt("ym2612CoreRender",0) ||
     settings.snCoreRender!=e->getConfInt("snCoreRender",0) ||
@@ -4001,6 +4049,8 @@ void FurnaceGUI::commitSettings() {
     settings.c64CoreRender!=e->getConfInt("c64CoreRender",0) ||
     settings.pokeyCoreRender!=e->getConfInt("pokeyCoreRender",1) ||
     settings.opnCoreRender!=e->getConfInt("opnCoreRender",1) ||
+    settings.opl2CoreRender!=e->getConfInt("opl2CoreRender",0) ||
+    settings.opl3CoreRender!=e->getConfInt("opl3CoreRender",0) ||
     settings.audioQuality!=e->getConfInt("audioQuality",0) ||
     settings.audioHiPass!=e->getConfInt("audioHiPass",1)
   );
@@ -4028,6 +4078,8 @@ void FurnaceGUI::commitSettings() {
   e->setConf("c64Core",settings.c64Core);
   e->setConf("pokeyCore",settings.pokeyCore);
   e->setConf("opnCore",settings.opnCore);
+  e->setConf("opl2Core",settings.opl2Core);
+  e->setConf("opl3Core",settings.opl3Core);
   e->setConf("arcadeCoreRender",settings.arcadeCoreRender);
   e->setConf("ym2612CoreRender",settings.ym2612CoreRender);
   e->setConf("snCoreRender",settings.snCoreRender);
@@ -4036,6 +4088,8 @@ void FurnaceGUI::commitSettings() {
   e->setConf("c64CoreRender",settings.c64CoreRender);
   e->setConf("pokeyCoreRender",settings.pokeyCoreRender);
   e->setConf("opnCoreRender",settings.opnCoreRender);
+  e->setConf("opl2CoreRender",settings.opl2CoreRender);
+  e->setConf("opl3CoreRender",settings.opl3CoreRender);
   e->setConf("pcSpeakerOutMethod",settings.pcSpeakerOutMethod);
   e->setConf("yrw801Path",settings.yrw801Path);
   e->setConf("tg100Path",settings.tg100Path);
