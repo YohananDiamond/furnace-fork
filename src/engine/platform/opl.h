@@ -73,6 +73,15 @@ class DivPlatformOPL: public DivDispatch {
       QueuedWrite(unsigned short a, unsigned char v): addr(a), val(v), addrOrVal(false) {}
     };
     FixedQueue<QueuedWrite,2048> writes;
+
+    unsigned int dacVal;
+    unsigned int dacVal2;
+    int dacOut;
+    int dacOut3[4];
+    bool lastSH;
+    bool lastSH2;
+    bool lastSY;
+    bool waitingBusy;
     
     unsigned char* adpcmBMem;
     size_t adpcmBMemLen;
@@ -141,6 +150,7 @@ class DivPlatformOPL: public DivDispatch {
     unsigned short getPan(int chan);
     DivChannelPair getPaired(int chan);
     DivDispatchOscBuffer* getOscBuffer(int chan);
+    int mapVelocity(int ch, float vel);
     unsigned char* getRegisterPool();
     int getRegisterPoolSize();
     void reset();
