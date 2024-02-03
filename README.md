@@ -1,3 +1,19 @@
+## hello there!!!
+
+This is a fork of the [original furnace
+tracker](https://github.com/tildearrow/furnace/releases), where I
+do some extra changes to it, be them personal or yet to be merged.
+Right now, they are:
+
+- command palette: https://github.com/tildearrow/furnace/pull/1160
+- file dialog bookmarks
+
+These features at available at the main branch (`yohanan`), which I
+compile using [my PKGBUILD](https://github.com/YohananDiamond/dotfiles/blob/master/pkgbuilds/furnace.PKGBUILD)
+
+Any contributions not related to this should go to tildearrow's repo,
+though :P
+
 # Furnace (chiptune tracker)
 
 ![screenshot](papers/screenshot3.png)
