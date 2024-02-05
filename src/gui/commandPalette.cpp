@@ -1,6 +1,6 @@
 /**
  * Furnace Tracker - multi-system chiptune tracker
- * Copyright (C) 2021-2023 tildearrow and contributors
+ * Copyright (C) 2021-2024 tildearrow and contributors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,10 +23,10 @@
 #include "misc/cpp/imgui_stdlib.h"
 #include <fmt/printf.h>
 #include <algorithm>
-#include <cctype>
+#include <ctype.h>
 #include "../ta-log.h"
 
-static inline bool matchFuzzy(const char* haystack,const char* needle) {
+static inline bool matchFuzzy(const char* haystack, const char* needle) {
   size_t h_i=0; // haystack idx
   size_t n_i=0; // needle idx
   while (needle[n_i]!='\0') {
@@ -94,7 +94,7 @@ void FurnaceGUI::drawPalette() {
         paletteSearchResults.push_back(0);
       }
       for (int i=0; i<e->song.insLen; i++) {
-        String s=fmt::sprintf("%02d: %s", i, e->song.ins[i]->name.c_str());
+        String s=fmt::sprintf("%02x: %s", i, e->song.ins[i]->name.c_str());
         if (matchFuzzy(s.c_str(),paletteQuery.c_str())) {
           paletteSearchResults.push_back(i+1); // because over here ins=0 is 'None'
         }
