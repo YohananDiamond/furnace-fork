@@ -1,18 +1,15 @@
 ## hello there!!!
 
-This is a fork of the [original furnace
-tracker](https://github.com/tildearrow/furnace/releases), where I
+This is a fork of [tildearrow's furnace tracker](https://github.com/tildearrow/furnace/), where I
 do some extra changes to it, be them personal or yet to be merged.
-Right now, they are:
 
-- command palette: https://github.com/tildearrow/furnace/pull/1160
-- file dialog bookmarks
+Current state:
+- [enabled IGFD bookmarks](https://github.com/tildearrow/furnace/pull/1140): closed, pending fixes to IGFD
+- [command palette](https://github.com/tildearrow/furnace/pull/1160): MERGED!
 
-These features at available at the main branch (`yohanan`), which I
-compile using [my PKGBUILD](https://github.com/YohananDiamond/dotfiles/blob/master/pkgbuilds/furnace.PKGBUILD)
+These features at available at the main branch (`yohanan`), which I compile using [my PKGBUILD](https://github.com/YohananDiamond/dotfiles/blob/master/pkgbuilds/furnace.PKGBUILD)
 
-Any contributions not related to this should go to tildearrow's repo,
-though :P
+Any contributions not related to this should go to tildearrow's repo, though :P
 
 # Furnace (chiptune tracker)
 
