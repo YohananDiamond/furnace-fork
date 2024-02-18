@@ -178,6 +178,7 @@ const char* insTypes[DIV_INS_MAX+1][3]={
   {"FM (ESFM)",ICON_FA_AREA_CHART,ICON_FUR_INS_ESFM},
   {"PowerNoise (noise)",ICON_FUR_NOISE,ICON_FUR_INS_POWERNOISE},
   {"PowerNoise (slope)",ICON_FUR_SAW,ICON_FUR_INS_POWERNOISE_SAW},
+  {"Dave",ICON_FA_BAR_CHART,ICON_FUR_INS_DAVE},
   {NULL,ICON_FA_QUESTION,ICON_FA_QUESTION}
 };
 
@@ -216,30 +217,17 @@ const char* resampleStrats[]={
   "best possible"
 };
 
-const FurnaceGUIColors fxColorsSort[]={//used for sorting
-  GUI_COLOR_PATTERN_EFFECT_PITCH,
-  GUI_COLOR_PATTERN_EFFECT_SONG,
-  GUI_COLOR_PATTERN_EFFECT_TIME,
-  GUI_COLOR_PATTERN_EFFECT_SPEED,
-  GUI_COLOR_PATTERN_EFFECT_PANNING,
-  GUI_COLOR_PATTERN_EFFECT_VOLUME,
-  GUI_COLOR_PATTERN_EFFECT_SYS_PRIMARY,
-  GUI_COLOR_PATTERN_EFFECT_SYS_SECONDARY,
-  GUI_COLOR_PATTERN_EFFECT_MISC,
-  GUI_COLOR_PATTERN_EFFECT_INVALID
-};
-
 const char* fxColorsNames[]={
+  "Invalid",
   "Pitch",
+  "Volume",
+  "Panning",
   "Song",
   "Time",
   "Speed",
-  "Panning",
-  "Volume",
-  "System Primary",
-  "System Secondary",
-  "Miscellaneous",
-  "Invalid"
+  "System (Primary)",
+  "System (Secondary)",
+  "Miscellaneous"
 };
 
 const FurnaceGUIColors fxColors[256]={
@@ -547,6 +535,7 @@ const FurnaceGUIActionDef guiActions[GUI_ACTION_MAX]={
 #else
   D("REDO", "Redo", FURKMOD_CMD|SDLK_y),
 #endif
+  D("QUIT", "Exit", 0),
   D("PLAY_TOGGLE", "Play/Stop (toggle)", SDLK_RETURN),
   D("PLAY", "Play", 0),
   D("STOP", "Stop", 0),
@@ -788,8 +777,8 @@ const FurnaceGUIActionDef guiActions[GUI_ACTION_MAX]={
   D("ORDERS_ADD", "Add order", SDLK_INSERT),
   D("ORDERS_DUPLICATE", "Duplicate order", FURKMOD_CMD|SDLK_d),
   D("ORDERS_DEEP_CLONE", "Deep clone order", FURKMOD_CMD|FURKMOD_SHIFT|SDLK_d),
-  D("ORDERS_DUPLICATE_END", "Duplicate order to end of song", FURKMOD_CMD|SDLK_e),
-  D("ORDERS_DEEP_CLONE_END", "Deep clone order to end of song", FURKMOD_CMD|FURKMOD_SHIFT|SDLK_e),
+  D("ORDERS_DUPLICATE_END", "Copy current order to end of song", FURKMOD_CMD|SDLK_e),
+  D("ORDERS_DEEP_CLONE_END", "Deep clone current order to end of song", FURKMOD_CMD|FURKMOD_SHIFT|SDLK_e),
   D("ORDERS_REMOVE", "Remove order", SDLK_DELETE),
   D("ORDERS_MOVE_UP", "Move order up", FURKMOD_SHIFT|SDLK_UP),
   D("ORDERS_MOVE_DOWN", "Move order down", FURKMOD_SHIFT|SDLK_DOWN),
@@ -1000,6 +989,7 @@ const FurnaceGUIColorDef guiColors[GUI_COLOR_MAX]={
   D(GUI_COLOR_INSTR_ESFM,"",ImVec4(0.1f,0.9f,1.0f,1.0f)),
   D(GUI_COLOR_INSTR_POWERNOISE,"",ImVec4(1.0f,1.0f,0.8f,1.0f)),
   D(GUI_COLOR_INSTR_POWERNOISE_SLOPE,"",ImVec4(1.0f,0.6f,0.3f,1.0f)),
+  D(GUI_COLOR_INSTR_DAVE,"",ImVec4(0.7f,0.7f,0.8f,1.0f)),
   D(GUI_COLOR_INSTR_UNKNOWN,"",ImVec4(0.3f,0.3f,0.3f,1.0f)),
 
   D(GUI_COLOR_CHANNEL_BG,"",ImVec4(0.4f,0.6f,0.8f,1.0f)),
@@ -1218,6 +1208,7 @@ const int availableSystems[]={
   DIV_SYSTEM_ESFM,
   DIV_SYSTEM_PONG,
   DIV_SYSTEM_POWERNOISE,
+  DIV_SYSTEM_DAVE,
   0 // don't remove this last one!
 };
 
@@ -1308,6 +1299,7 @@ const int chipsSpecial[]={
   DIV_SYSTEM_MMC5,
   DIV_SYSTEM_SM8521,
   DIV_SYSTEM_POWERNOISE,
+  DIV_SYSTEM_DAVE,
   0 // don't remove this last one!
 };
 
@@ -1351,10 +1343,4 @@ const char* chipCategoryNames[]={
   "Special",
   "Sample",
   NULL
-};
-
-// NORMAL, LETTER,
-const char* insIcons[]={
-  ICON_FA_AREA_CHART,
-
 };
