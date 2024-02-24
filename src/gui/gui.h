@@ -1504,8 +1504,9 @@ class FurnaceGUI {
   bool vgmExportDirectStream, displayInsTypeList, displayWaveSizeList;
   bool portrait, injectBackUp, mobileMenuOpen, warnColorPushed;
   bool wantCaptureKeyboard, oldWantCaptureKeyboard, displayMacroMenu;
-  bool displayNew, displayExport, displayPalette, fullScreen, preserveChanPos, wantScrollList, noteInputPoly, notifyWaveChange;
+  bool displayNew, displayExport, displayPalette, fullScreen, preserveChanPos, sysDupCloneChannels, sysDupEnd, wantScrollList, noteInputPoly, notifyWaveChange;
   bool displayPendingIns, pendingInsSingle, displayPendingRawSample, snesFilterHex, modTableHex, displayEditString;
+  bool shaderEditor;
   bool mobileEdit;
   bool killGraphics;
   bool safeMode;

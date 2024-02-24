@@ -103,10 +103,10 @@ const char* sh_oscRender_srcF=
   "uniform float uLineWidth;\n"
   "uniform sampler2D oscVal;\n"
   "varying vec2 fur_fragCoord;\n"
+  "const float oneStep=1.0/2048.0;\n"
   "void main() {\n"
   "  float alpha=0.0;\n"
   "  float xMax=ceil(fur_fragCoord.x+uLineWidth);\n"
-  "  float oneStep=1.0/2048.0;\n"
   "  float valmax=-1024.0;\n"
   "  float valmin=1024.0;\n"
   "  for (float x=floor(fur_fragCoord.x-uLineWidth); x<=xMax; x+=1.0) {\n"
@@ -117,16 +117,17 @@ const char* sh_oscRender_srcF=
   "  if ((fur_fragCoord.y-uLineWidth)>valmax*uResolution.y) discard;\n"
   "  if ((fur_fragCoord.y+uLineWidth)<valmin*uResolution.y) discard;\n"
   "  float slope=abs(valmax-valmin)*uResolution.y;\n"
-  "  float slopeDiv=min(1.0,2.0/ceil(slope));\n"
+  "  float slopeMul=pow(2.0,ceil(log2(ceil(slope))));\n"
+  "  float slopeDiv=min(1.0,1.0/slopeMul);\n"
   "  float xRight=ceil(fur_fragCoord.x+uLineWidth);\n"
   "  for (float x=max(0.0,floor(fur_fragCoord.x-uLineWidth)); x<=xRight; x+=slopeDiv) {\n"
-  "    float val0=texture2D(oscVal,vec2(floor(x)*oneStep,1.0)).x*uResolution.y;\n"
-  "    float val1=texture2D(oscVal,vec2(floor(x+1.0)*oneStep,1.0)).x*uResolution.y;\n"
-  "    float val=mix(val0,val1,fract(x));\n"
+  "    float val0=texture2D(oscVal,vec2(floor(x)*oneStep,1.0)).x;\n"
+  "    float val1=texture2D(oscVal,vec2(floor(x+1.0)*oneStep,1.0)).x;\n"
+  "    float val=mix(val0,val1,fract(x))*uResolution.y;\n"
   "    alpha+=clamp(uLineWidth-distance(vec2(fur_fragCoord.x,fur_fragCoord.y),vec2(x,val)),0.0,1.0);\n"
   "  }\n"
   "  if (slope>1.0) {\n"
-  "    gl_FragColor = vec4(uColor.xyz,uColor.w*clamp(alpha/uLineWidth,0.0,1.0));\n"
+  "    gl_FragColor = vec4(uColor.xyz,uColor.w*clamp(alpha*(1.0+uResolution.y*pow(slope/uResolution.y,2.0))/(uLineWidth*slopeMul),0.0,1.0));\n"
   "  } else {\n"
   "    gl_FragColor = vec4(uColor.xyz,uColor.w*clamp(alpha/uLineWidth,0.0,1.0));\n"
   "  }\n"
@@ -169,27 +170,27 @@ const char* sh_oscRender_srcF=
   "void main() {\n"
   "  float alpha=0.0;\n"
   "  float xMax=ceil(fur_fragCoord.x+uLineWidth);\n"
-  "  float oneStep=1.0/2048.0;\n"
   "  float valmax=-1024.0;\n"
   "  float valmin=1024.0;\n"
   "  for (float x=floor(fur_fragCoord.x-uLineWidth); x<=xMax; x+=1.0) {\n"
-  "    float val=texture(oscVal,x*oneStep).x;\n"
+  "    float val=texelFetch(oscVal,int(x),0).x;\n"
   "    if (val>valmax) valmax=val;\n"
   "    if (val<valmin) valmin=val;\n"
   "  }\n"
   "  if ((fur_fragCoord.y-uLineWidth)>valmax*uResolution.y) discard;\n"
   "  if ((fur_fragCoord.y+uLineWidth)<valmin*uResolution.y) discard;\n"
-  "  float slope=sqrt(abs(valmax-valmin)*uResolution.y);\n"
-  "  float slopeDiv=min(1.0,1.0/ceil(slope));\n"
+  "  float slope=abs(valmax-valmin)*uResolution.y;\n"
+  "  float slopeMul=pow(2.0,ceil(log2(ceil(slope))));\n"
+  "  float slopeDiv=1.0/slopeMul;\n"
   "  float xRight=ceil(fur_fragCoord.x+uLineWidth);\n"
   "  for (float x=max(0.0,floor(fur_fragCoord.x-uLineWidth)); x<=xRight; x+=slopeDiv) {\n"
-  "    float val0=texture(oscVal,floor(x)*oneStep).x*uResolution.y;\n"
-  "    float val1=texture(oscVal,floor(x+1.0)*oneStep).x*uResolution.y;\n"
-  "    float val=mix(val0,val1,fract(x));\n"
-  "    alpha+=clamp(uLineWidth-distance(vec2(fur_fragCoord.x,fur_fragCoord.y),vec2(x,val)),0.0,1.0);\n"
+  "    float val0=texelFetch(oscVal,int(x),0).x;\n"
+  "    float val1=texelFetch(oscVal,int(x)+1,0).x;\n"
+  "    float val=mix(val0,val1,fract(x))*uResolution.y;\n"
+  "    alpha+=max(uLineWidth-distance(vec2(fur_fragCoord.x,fur_fragCoord.y),vec2(x,val)),0.0);\n"
   "  }\n"
   "  if (slope>1.0) {\n"
-  "    fur_FragColor = vec4(uColor.xyz,uColor.w*clamp(alpha/uLineWidth,0.0,1.0));\n"
+  "    fur_FragColor = vec4(uColor.xyz,uColor.w*clamp(alpha*(1.0+uResolution.y*pow(slope/uResolution.y,2.0))/(uLineWidth*slopeMul),0.0,1.0));\n"
   "  } else {\n"
   "    fur_FragColor = vec4(uColor.xyz,uColor.w*clamp(alpha/uLineWidth,0.0,1.0));\n"
   "  }\n"
@@ -605,13 +606,13 @@ bool FurnaceGUIRenderGL::init(SDL_Window* win) {
   C(glGenTextures(1,&oscDataTex));
 #ifdef USE_GLES
   C(glBindTexture(GL_TEXTURE_2D,oscDataTex));
-  C(glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR));
-  C(glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR));
+  C(glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST));
+  C(glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST));
   C(glTexImage2D(GL_TEXTURE_2D,0,GL_RED_EXT,2048,1,0,GL_RED_EXT,GL_FLOAT,NULL));
 #else
   C(glBindTexture(GL_TEXTURE_1D,oscDataTex));
-  C(glTexParameteri(GL_TEXTURE_1D,GL_TEXTURE_MIN_FILTER,GL_LINEAR));
-  C(glTexParameteri(GL_TEXTURE_1D,GL_TEXTURE_MAG_FILTER,GL_LINEAR));
+  C(glTexParameteri(GL_TEXTURE_1D,GL_TEXTURE_MIN_FILTER,GL_NEAREST));
+  C(glTexParameteri(GL_TEXTURE_1D,GL_TEXTURE_MAG_FILTER,GL_NEAREST));
   C(glTexImage1D(GL_TEXTURE_1D,0,GL_RED,2048,0,GL_RED,GL_FLOAT,NULL));
 #endif
   C(furActiveTexture(GL_TEXTURE0));
