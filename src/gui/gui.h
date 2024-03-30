@@ -485,6 +485,7 @@ enum FurnaceGUIWindows {
   GUI_WINDOW_INTRO_MON,
   GUI_WINDOW_MEMORY,
   GUI_WINDOW_CS_PLAYER,
+  GUI_WINDOW_USER_PRESETS,
   GUI_WINDOW_SPOILER
 };
 
@@ -677,6 +678,7 @@ enum FurnaceGUIActions {
   GUI_ACTION_WINDOW_XY_OSC,
   GUI_ACTION_WINDOW_MEMORY,
   GUI_ACTION_WINDOW_CS_PLAYER,
+  GUI_ACTION_WINDOW_USER_PRESETS,
 
   GUI_ACTION_COLLAPSE_WINDOW,
   GUI_ACTION_CLOSE_WINDOW,
@@ -1231,22 +1233,24 @@ struct Gradient2D {
 
 struct FurnaceGUISysDefChip {
   DivSystem sys;
-  float vol, pan;
-  const char* flags;
-  FurnaceGUISysDefChip(DivSystem s, float v, float p, const char* f):
+  float vol, pan, panFR;
+  String flags;
+  FurnaceGUISysDefChip(DivSystem s, float v, float p, const char* f, float pf=0.0):
     sys(s),
     vol(v),
     pan(p),
+    panFR(pf),
     flags(f) {}
 };
 
 struct FurnaceGUISysDef {
-  const char* name;
-  const char* extra;
+  String name;
+  String extra;
   String definition;
   std::vector<FurnaceGUISysDefChip> orig;
   std::vector<FurnaceGUISysDef> subDefs;
   FurnaceGUISysDef(const char* n, std::initializer_list<FurnaceGUISysDefChip> def, const char* e=NULL);
+  FurnaceGUISysDef(const char* n, const char* def, DivEngine* e);
 };
 
 struct FurnaceGUISysCategory {
@@ -2080,7 +2084,7 @@ class FurnaceGUI {
   bool mixerOpen, debugOpen, inspectorOpen, oscOpen, volMeterOpen, statsOpen, compatFlagsOpen;
   bool pianoOpen, notesOpen, channelsOpen, regViewOpen, logOpen, effectListOpen, chanOscOpen;
   bool subSongsOpen, findOpen, spoilerOpen, patManagerOpen, sysManagerOpen, clockOpen, speedOpen;
-  bool groovesOpen, xyOscOpen, memoryOpen, csPlayerOpen;
+  bool groovesOpen, xyOscOpen, memoryOpen, csPlayerOpen, userPresetsOpen;
 
   bool shortIntro;
   bool insListDir, waveListDir, sampleListDir;
@@ -2473,6 +2477,9 @@ class FurnaceGUI {
   int dmfExportVersion;
   FurnaceGUIExportTypes curExportType;
 
+  // user presets window
+  int selectedUserPreset;
+
   void drawExportAudio(bool onWindow=false);
   void drawExportVGM(bool onWindow=false);
   void drawExportZSM(bool onWindow=false);
@@ -2609,6 +2616,7 @@ class FurnaceGUI {
   void drawClock();
   void drawTutorial();
   void drawXYOsc();
+  void drawUserPresets();
 
   void parseKeybinds();
   void promptKey(int which);
