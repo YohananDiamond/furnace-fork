@@ -32,6 +32,7 @@ these fields are 0 in format versions prior to 100 (0.6pre1).
 
 the format versions are:
 
+- 197: Furnace 0.6.2
 - 192: Furnace 0.6.1
 - 181: Furnace 0.6
 - 180: Furnace 0.6pre18
@@ -642,7 +643,8 @@ size | description
  ??? | pattern data
      | - read a byte per row.
      | - if it is 0xff, end of data. the rest of the pattern is empty.
-     | - if bit 7 is set, then read bit 0-6 as "skip N+2 rows".
+     | - if bit 7 is set, then skip N+2 rows. N is bits 0-6.
+     |   - for example, $80 means skip 2 rows, $81 means skip 3, $82 means 4 and so on.
      | - if bit 7 is clear, then:
      |   - bit 0: note present
      |   - bit 1: ins present
@@ -651,6 +653,7 @@ size | description
      |   - bit 4: effect value 0 present
      |   - bit 5: other effects (0-3) present
      |   - bit 6: other effects (4-7) present
+     |   - if none of these bits are set, then skip 1 row.
      | - if bit 5 is set, read another byte:
      |   - bit 0: effect 0 present
      |   - bit 1: effect value 0 present

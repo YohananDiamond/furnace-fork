@@ -1370,6 +1370,7 @@ void FurnaceGUI::keyDown(SDL_Event& ev) {
   if (introPos<11.0 && !shortIntro) return;
   if (ImGuiFileDialog::Instance()->IsOpened()) return;
   if (aboutOpen) return;
+  if (cvOpen) return;
 
   int mapped=ev.key.keysym.sym;
   if (ev.key.keysym.mod&KMOD_CTRL) {
@@ -3095,6 +3096,7 @@ int FurnaceGUI::processEvent(SDL_Event* ev) {
     e->saveConf();
   }
 #endif
+  if (cvOpen) return 1;
   if (ev->type==SDL_KEYDOWN) {
     if (!ev->key.repeat && latchTarget==0 && !wantCaptureKeyboard && !sampleMapWaitingInput && (ev->key.keysym.mod&(~(VALID_MODS)))==0) {
       if (settings.notePreviewBehavior==0) return 1;
@@ -3700,6 +3702,10 @@ bool FurnaceGUI::loop() {
         scrConfW=scrW;
         scrConfH=scrH;
       }
+      if (rend!=NULL) {
+        logV("restoring swap interval...");
+        rend->setSwapInterval(settings.vsync);
+      }
     }
     // update canvas size as well
     if (!rend->getOutputSize(canvasW,canvasH)) {
@@ -3968,7 +3974,7 @@ bool FurnaceGUI::loop() {
 
       logD("starting render backend...");
       while (++initAttempts<=5) {
-        if (rend->init(sdlWin)) {
+        if (rend->init(sdlWin,settings.vsync)) {
           break;
         }
         SDL_Delay(1000);
@@ -4568,7 +4574,8 @@ bool FurnaceGUI::loop() {
                 if (maxVol<1 || p->data[cursor.y][3]>maxVol) {
                   info=fmt::sprintf("Set volume: %d (%.2X, INVALID!)",p->data[cursor.y][3],p->data[cursor.y][3]);
                 } else {
-                  info=fmt::sprintf("Set volume: %d (%.2X, %d%%)",p->data[cursor.y][3],p->data[cursor.y][3],(p->data[cursor.y][3]*100)/maxVol);
+                  float realVol=e->mapVelocity(cursor.xCoarse,(float)p->data[cursor.y][3]/(float)maxVol);
+                  info=fmt::sprintf("Set volume: %d (%.2X, %d%%)",p->data[cursor.y][3],p->data[cursor.y][3],(int)(realVol*100.0f/(float)maxVol));
                 }
                 hasInfo=true;
               }
@@ -4715,32 +4722,6 @@ bool FurnaceGUI::loop() {
       MEASURE(userPresets,drawUserPresets());
     }
 
-    // NEW CODE - REMOVE WHEN DONE
-    if (shaderEditor) {
-      if (ImGui::Begin("Shader Editor 2024",&shaderEditor,ImGuiWindowFlags_NoScrollWithMouse|ImGuiWindowFlags_NoScrollbar)) {
-        ImGui::PushFont(patFont);
-        ImGui::InputTextMultiline("##SHFragment",&newOscFragment,ImVec2(ImGui::GetContentRegionAvail().x,ImGui::GetContentRegionAvail().y-ImGui::GetFrameHeightWithSpacing()),ImGuiInputTextFlags_UndoRedo);
-        ImGui::PopFont();
-        if (ImGui::Button("Save")) {
-          FILE* f=ps_fopen("/storage/emulated/0/osc.fsh","w");
-          if (f==NULL) {
-            showError("Something happened");
-          } else {
-            fwrite(newOscFragment.c_str(),1,newOscFragment.size(),f);
-            fclose(f);
-            showError("Saved!");
-          }
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Apply")) {
-          if (!rend->regenOscShader(newOscFragment.c_str())) {
-            showError("Of course you screwed it up, again!");
-          }
-        }
-      }
-      ImGui::End();
-    }
-
     // release selection if mouse released
     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && selecting) {
       if (!selectingFull) cursor=selEnd;
@@ -4760,8 +4741,6 @@ bool FurnaceGUI::loop() {
       keyHit1[i]-=0.2f;
       if (keyHit1[i]<0.0f) keyHit1[i]=0.0f;
     }
-
-    activateTutorial(GUI_TUTORIAL_OVERVIEW);
 
     if (inspectorOpen) ImGui::ShowMetricsWindow(&inspectorOpen);
 
@@ -4991,6 +4970,9 @@ bool FurnaceGUI::loop() {
                     break;
                   case GUI_WARN_OPEN_BACKUP:
                     openFileDialog(GUI_FILE_OPEN_BACKUP);
+                    break;
+                  case GUI_WARN_CV:
+                    cvOpen=true;
                     break;
                   default:
                     break;
@@ -5635,6 +5617,30 @@ bool FurnaceGUI::loop() {
           if (ImGui::Button("No")) {
             ImGui::CloseCurrentPopup();
             openFileDialog(GUI_FILE_OPEN);
+          }
+          ImGui::SameLine();
+          if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            ImGui::CloseCurrentPopup();
+          }
+          break;
+        case GUI_WARN_CV:
+          if (ImGui::Button("Yes")) {
+            ImGui::CloseCurrentPopup();
+            if (curFileName=="" || curFileName.find(backupPath)==0 || e->song.version>=0xff00) {
+              openFileDialog(GUI_FILE_SAVE);
+              postWarnAction=GUI_WARN_CV;
+            } else {
+              if (save(curFileName,e->song.isDMF?e->song.version:0)>0) {
+                showError(fmt::sprintf("Error while saving file! (%s)",lastError));
+              } else {
+                cvOpen=true;
+              }
+            }
+          }
+          ImGui::SameLine();
+          if (ImGui::Button("No")) {
+            ImGui::CloseCurrentPopup();
+            cvOpen=true;
           }
           ImGui::SameLine();
           if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
@@ -6288,6 +6294,19 @@ bool FurnaceGUI::loop() {
     }
 #endif
 
+    if (settings.displayRenderTime) {
+      String renderTime=fmt::sprintf("%.0fµs",ImGui::GetIO().DeltaTime*1000000.0);
+      String renderTime2=fmt::sprintf("%.1f FPS",1.0/ImGui::GetIO().DeltaTime);
+      ImDrawList* dl=ImGui::GetForegroundDrawList();
+      ImVec2 markPos=ImVec2(canvasW-ImGui::CalcTextSize(renderTime.c_str()).x-60.0*dpiScale,4.0*dpiScale);
+      ImVec2 markPos2=ImVec2(canvasW-ImGui::CalcTextSize(renderTime2.c_str()).x-160.0*dpiScale,4.0*dpiScale);
+
+      dl->AddText(markPos,0xffffffff,renderTime.c_str());
+      dl->AddText(markPos2,0xffffffff,renderTime2.c_str());
+
+      //logV("%s (%s)",renderTime,renderTime2);
+    }
+
     layoutTimeEnd=SDL_GetPerformanceCounter();
 
     // backup trigger
@@ -6459,6 +6478,23 @@ bool FurnaceGUI::loop() {
     }
     drawTimeEnd=SDL_GetPerformanceCounter();
     swapTimeBegin=SDL_GetPerformanceCounter();
+    if (!settings.vsync || !rend->canVSync()) {
+      if (settings.frameRateLimit>0) {
+        unsigned int presentDelay=SDL_GetPerformanceFrequency()/settings.frameRateLimit;
+        if ((nextPresentTime-swapTimeBegin)<presentDelay) {
+#ifdef _WIN32
+          unsigned int mDivider=SDL_GetPerformanceFrequency()/1000;
+          Sleep((unsigned int)(nextPresentTime-swapTimeBegin)/mDivider);
+#else
+          unsigned int mDivider=SDL_GetPerformanceFrequency()/1000000;
+          usleep((unsigned int)(nextPresentTime-swapTimeBegin)/mDivider);
+#endif
+          nextPresentTime+=presentDelay;
+        } else {
+          nextPresentTime=swapTimeBegin+presentDelay;
+        }
+      }
+    }
     rend->present();
     if (settings.renderClearPos) {
       rend->clear(uiColors[GUI_COLOR_BACKGROUND]);
@@ -6713,6 +6749,8 @@ bool FurnaceGUI::init() {
   xyOscIntensity=e->getConfFloat("xyOscIntensity",2.0f);
   xyOscThickness=e->getConfFloat("xyOscThickness",2.0f);
 
+  cvHiScore=e->getConfInt("cvHiScore",25000);
+
   syncSettings();
   syncTutorial();
 
@@ -6729,7 +6767,6 @@ bool FurnaceGUI::init() {
   }
 
   initSystemPresets();
-  initTutorial();
 
   e->setAutoNotePoly(noteInputPoly);
 
@@ -6957,12 +6994,8 @@ bool FurnaceGUI::init() {
     SDL_SetHint(SDL_HINT_RENDER_DRIVER,settings.renderDriver.c_str());
   }
 
-  if (safeMode) {
-    SDL_SetHint(SDL_HINT_RENDER_DRIVER,"software");
-  }
-
   logD("starting render backend...");
-  if (!rend->init(sdlWin)) {
+  if (!rend->init(sdlWin,settings.vsync)) {
     logE("it failed...");
     if (settings.renderBackend!="SDL") {
       settings.renderBackend="SDL";
@@ -7018,9 +7051,6 @@ bool FurnaceGUI::init() {
   rend->initGUI(sdlWin);
 
   loadUserPresets(true);
-
-  // NEW CODE - REMOVE WHEN DONE
-  newOscFragment=rend->getStupidFragment();
 
   applyUISettings();
 
@@ -7285,6 +7315,8 @@ void FurnaceGUI::commitState() {
       e->setConf(key,recentFile[i]);
     }
   }
+
+  e->setConf("cvHiScore",cvHiScore);
 }
 
 bool FurnaceGUI::finish(bool saveConfig) {
@@ -7329,7 +7361,7 @@ bool FurnaceGUI::finish(bool saveConfig) {
 }
 
 bool FurnaceGUI::requestQuit() {
-  if (modified) {
+  if (modified && !cvOpen) {
     showWarning("Unsaved changes! Save changes before quitting?",GUI_WARN_QUIT);
   } else {
     quit=true;
@@ -7344,6 +7376,7 @@ FurnaceGUI::FurnaceGUI():
   sdlWin(NULL),
   vibrator(NULL),
   vibratorAvailable(false),
+  cv(NULL),
   sampleTex(NULL),
   sampleTexW(0),
   sampleTexH(0),
@@ -7385,7 +7418,6 @@ FurnaceGUI::FurnaceGUI():
   snesFilterHex(false),
   modTableHex(false),
   displayEditString(false),
-  shaderEditor(false),
   mobileEdit(false),
   killGraphics(false),
   safeMode(false),
@@ -7542,7 +7574,9 @@ FurnaceGUI::FurnaceGUI():
   xyOscOpen(false),
   memoryOpen(false),
   csPlayerOpen(false),
+  cvOpen(false),
   userPresetsOpen(false),
+  cvNotSerious(false),
   shortIntro(false),
   insListDir(false),
   waveListDir(false),
@@ -7695,6 +7729,7 @@ FurnaceGUI::FurnaceGUI():
   eventTimeBegin(0),
   eventTimeEnd(0),
   eventTimeDelta(0),
+  nextPresentTime(0),
   perfMetricsLen(0),
   chanToMove(-1),
   sysToMove(-1),
@@ -7848,8 +7883,7 @@ FurnaceGUI::FurnaceGUI():
   curTutorialStep(0),
   audioExportType(0),
   dmfExportVersion(0),
-  curExportType(GUI_EXPORT_NONE),
-  selectedUserPreset(-1) {
+  curExportType(GUI_EXPORT_NONE) {
   // value keys
   valueKeys[SDLK_0]=0;
   valueKeys[SDLK_1]=1;

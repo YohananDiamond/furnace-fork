@@ -219,6 +219,7 @@ const char* aboutLine[]={
   "YM3812-LLE, YMF262-LLE and YMF276-LLE by nukeykt",
   "ESFMu (modified version) by Kagamiin~",
   "ymfm by Aaron Giles",
+  "emu2413 by Digital Sound Antiques",
   "MAME SN76496 by Nicola Salmoria",
   "MAME AY-3-8910 by Couriersud",
   "with AY8930 fixes by Eulous, cam900 and Grauw",
@@ -373,6 +374,16 @@ void FurnaceGUI::drawAbout() {
     while (aboutHue>1) aboutHue--;
     while (aboutSin>=2400) aboutSin-=2400;
     if (aboutScroll>(42*dpiScale*aboutCount+canvasH)) aboutScroll=-20*dpiScale;
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Space)) {
+      aboutOpen=false;
+      if (modified) {
+        showWarning("Unsaved changes! Save changes before playing?",GUI_WARN_CV);
+      } else {
+        cvOpen=true;
+        cvNotSerious=true;
+      }
+    }
 
     WAKE_UP;
   }

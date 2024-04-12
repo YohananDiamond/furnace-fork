@@ -509,16 +509,6 @@ void FurnaceGUI::drawMobileControls() {
           doAction(GUI_ACTION_SAVE_AS);
         }
 
-        if (ImGui::Button("1.1+ .dmf")) {
-          mobileMenuOpen=false;
-          openFileDialog(GUI_FILE_SAVE_DMF);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Legacy .dmf")) {
-          mobileMenuOpen=false;
-          openFileDialog(GUI_FILE_SAVE_DMF_LEGACY);
-        }
-        ImGui::SameLine();
         if (ImGui::Button("Export")) {
           doAction(GUI_ACTION_EXPORT);
         }
@@ -592,6 +582,14 @@ void FurnaceGUI::drawMobileControls() {
           memoryOpen=!memoryOpen;
         }
 
+        if (ImGui::Button("CV")) {
+          cvOpen=!cvOpen;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Presets")) {
+          userPresetsOpen=!userPresetsOpen;
+        }
+
         ImGui::Separator();
 
         ImGui::Button("Panic");
@@ -613,9 +611,6 @@ void FurnaceGUI::drawMobileControls() {
           mobileMenuOpen=false;
           mobileMenuPos=0.0f;
           aboutOpen=true;
-        }
-        if (ImGui::Button("Shader Editor")) {
-          shaderEditor=!shaderEditor;
         }
         if (ImGui::Button("Switch to Desktop Mode")) {
           toggleMobileUI(!mobileUI);

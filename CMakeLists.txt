@@ -16,7 +16,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_PROJECT_VERSION_MAJOR 0)
 set(CMAKE_PROJECT_VERSION_MINOR 6)
-set(CMAKE_PROJECT_VERSION_PATCH 1)
+set(CMAKE_PROJECT_VERSION_PATCH 2)
 
 set(BUILD_GUI_DEFAULT ON)
 set(USE_SDL2_DEFAULT ON)
@@ -67,21 +67,25 @@ else()
 endif()
 
 set(WITH_RENDER_SDL_DEFAULT ON)
-if (APPLE)
-  set(WITH_RENDER_OPENGL_DEFAULT OFF)
-else()
-  set(WITH_RENDER_OPENGL_DEFAULT ON)
-endif()
+set(WITH_RENDER_OPENGL_DEFAULT ON)
 if (WIN32)
   set(WITH_RENDER_DX11_DEFAULT ON)
+  set(WITH_RENDER_DX9_DEFAULT ON)
 else()
   set(WITH_RENDER_DX11_DEFAULT OFF)
+  set(WITH_RENDER_DX9_DEFAULT OFF)
 endif()
 
 if (ANDROID)
   set(USE_GLES_DEFAULT ON)
+  set(WITH_RENDER_OPENGL1_DEFAULT OFF)
 else()
   set(USE_GLES_DEFAULT OFF)
+  if (APPLE)
+    set(WITH_RENDER_OPENGL1_DEFAULT OFF)
+  else()
+    set(WITH_RENDER_OPENGL1_DEFAULT ON)
+  endif()
 endif()
 
 option(BUILD_GUI "Build the tracker (disable to build only a headless player)" ${BUILD_GUI_DEFAULT})
@@ -93,7 +97,9 @@ option(WITH_JACK "Whether to build with JACK support. Auto-detects if JACK is av
 option(WITH_PORTAUDIO "Whether to build with PortAudio for audio output." ${WITH_PORTAUDIO_DEFAULT})
 option(WITH_RENDER_SDL "Whether to build with the SDL_Renderer render backend." ${WITH_RENDER_SDL_DEFAULT})
 option(WITH_RENDER_OPENGL "Whether to build with the OpenGL render backend." ${WITH_RENDER_OPENGL_DEFAULT})
+option(WITH_RENDER_OPENGL1 "Whether to build with the OpenGL 1.1 render backend." ${WITH_RENDER_OPENGL1_DEFAULT})
 option(WITH_RENDER_DX11 "Whether to build with the DirectX 11 render backend." ${WITH_RENDER_DX11_DEFAULT})
+option(WITH_RENDER_DX9 "Whether to build with the DirectX 9 render backend." ${WITH_RENDER_DX9_DEFAULT})
 option(USE_GLES "Use OpenGL ES for the OpenGL render backend." ${USE_GLES_DEFAULT})
 option(USE_FREETYPE "Use FreeType for font rendering." ON)
 option(SYSTEM_FFTW "Use a system-installed version of FFTW instead of the vendored one" OFF)
@@ -137,18 +143,19 @@ else()
   set(SYSTEM_SDL_MIN_VER 2.0.0)
 endif()
 
-if (WIN32)
-  # support Windows XP
-  if (SUPPORT_XP)
-    add_compile_definitions("_WIN32_WINNT=0x0501")
-  endif()
-endif()
-
 #list(APPEND DEPENDENCIES_INCLUDE_DIRS "extern/SAASound/include")
 list(APPEND DEPENDENCIES_INCLUDE_DIRS "extern/vgsound_emu-modified")
 
 find_package(Threads REQUIRED)
 list(APPEND DEPENDENCIES_LIBRARIES ${CMAKE_THREAD_LIBS_INIT})
+
+
+if (WIN32)
+  # support Windows XP
+  if (SUPPORT_XP)
+    list(APPEND DEPENDENCIES_DEFINES "_WIN32_WINNT=0x0501")
+  endif()
+endif()
 
 if (SYSTEM_FFTW)
   find_package(PkgConfig REQUIRED)
@@ -391,7 +398,7 @@ else()
 endif()
 
 if (BUILD_GUI)
-  if (NOT WITH_RENDER_SDL AND NOT WITH_RENDER_OPENGL AND NOT WITH_RENDER_DX11)
+  if (NOT WITH_RENDER_SDL AND NOT WITH_RENDER_OPENGL AND NOT WITH_RENDER_OPENGL1 AND NOT WITH_RENDER_DX11 AND NOT WITH_RENDER_DX9)
     message(FATAL_ERROR "No render backends selected!")
   endif()
 endif()
@@ -485,7 +492,7 @@ extern/adpcm/yma_codec.c
 extern/adpcm/ymb_codec.c
 extern/adpcm/ymz_codec.c
 
-extern/adpcm-xq/adpcm-lib.c
+extern/adpcm-xq-s/adpcm-lib.c
 
 extern/opn/ym3438.c
 extern/Nuked-PSG/ympsg.c
@@ -497,6 +504,7 @@ extern/YMF262-LLE/fmopl3.c
 extern/YMF276-LLE/fmopn2.c
 extern/ESFMu/esfm.c
 extern/ESFMu/esfm_registers.c
+extern/emu2413/emu2413.c
 
 extern/pwrnoise/pwrnoise.c
 
@@ -747,6 +755,13 @@ if (WIN32)
   list(APPEND ENGINE_SOURCES res/furnace.rc)
 endif()
 
+if (APPLE)
+  if (CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 10.12)
+    list(APPEND DEPENDENCIES_INCLUDE_DIRS extern/macports-legacy-support/include)
+    list(APPEND ENGINE_SOURCES extern/macports-legacy-support/src/time.c)
+  endif()
+endif()
+
 set(CLI_SOURCES
 src/cli/cli.cpp
 )
@@ -757,6 +772,7 @@ extern/imgui_patched/imgui_draw.cpp
 extern/imgui_patched/imgui_tables.cpp
 extern/imgui_patched/imgui_widgets.cpp
 extern/imgui_patched/backends/imgui_impl_sdl2.cpp
+extern/imgui_software_renderer/imgui_sw.cpp
 extern/imgui_patched/misc/cpp/imgui_stdlib.cpp
 extern/igfd/ImGuiFileDialog.cpp
 
@@ -764,6 +780,7 @@ src/gui/plot_nolerp.cpp
 
 src/gui/render.cpp
 src/gui/render/abstract.cpp
+src/gui/render/renderSoftware.cpp
 
 src/gui/font_exo.cpp
 src/gui/font_liberationSans.cpp
@@ -776,6 +793,7 @@ src/gui/font_unifont.cpp
 src/gui/font_icon.cpp
 src/gui/font_furicon.cpp
 src/gui/fonts.cpp
+src/gui/fontzlib.cpp
 
 src/gui/image_icon.cpp
 src/gui/image_talogo.cpp
@@ -842,6 +860,7 @@ src/gui/sysManager.cpp
 src/gui/sysPartNumber.cpp
 src/gui/sysPicker.cpp
 src/gui/tutorial.cpp
+src/gui/userPresets.cpp
 src/gui/util.cpp
 src/gui/waveEdit.cpp
 src/gui/volMeter.cpp
@@ -881,12 +900,32 @@ if (WITH_RENDER_OPENGL)
   endif()
   if (WIN32)
     list(APPEND DEPENDENCIES_LIBRARIES opengl32)
+  elseif(APPLE)
+    list(APPEND DEPENDENCIES_LIBRARIES "-framework OpenGL")
   elseif(USE_GLES)
     list(APPEND DEPENDENCIES_LIBRARIES GLESv2)
   else()
     list(APPEND DEPENDENCIES_LIBRARIES GL)
   endif()
-  message(STATUS "UI render backend: OpenGL")
+  if (USE_GLES)
+    message(STATUS "UI render backend: OpenGL ES 2.0")
+  else()
+    message(STATUS "UI render backend: OpenGL 3.0/2.0")
+  endif()
+endif()
+
+if (WITH_RENDER_OPENGL1)
+  list(APPEND GUI_SOURCES src/gui/render/renderGL1.cpp)
+  list(APPEND GUI_SOURCES extern/imgui_patched/backends/imgui_impl_opengl2.cpp)
+  list(APPEND DEPENDENCIES_DEFINES HAVE_RENDER_GL1)
+  if (NOT WITH_RENDER_OPENGL)
+    if (WIN32)
+      list(APPEND DEPENDENCIES_LIBRARIES opengl32)
+    else()
+      list(APPEND DEPENDENCIES_LIBRARIES GL)
+    endif()
+  endif()
+  message(STATUS "UI render backend: OpenGL 1.1")
 endif()
 
 if (WITH_RENDER_DX11)
@@ -897,13 +936,25 @@ if (WITH_RENDER_DX11)
       list(APPEND GUI_SOURCES src/gui/render/renderDX11.cpp)
       list(APPEND GUI_SOURCES extern/imgui_patched/backends/imgui_impl_dx11.cpp)
       list(APPEND DEPENDENCIES_DEFINES HAVE_RENDER_DX11)
-      list(APPEND DEPENDENCIES_LIBRARIES d3d11)
+      list(APPEND DEPENDENCIES_LIBRARIES d3d11 dxgi)
       message(STATUS "UI render backend: DirectX 11")
     endif()
   else()
     message(FATAL_ERROR "DirectX 11 render backend only for Windows!")
   endif()
 endif()
+
+#if (WITH_RENDER_DX9)
+#  if (WIN32)
+#    list(APPEND GUI_SOURCES src/gui/render/renderDX9.cpp)
+#    list(APPEND GUI_SOURCES extern/imgui_patched/backends/imgui_impl_dx9.cpp)
+#    list(APPEND DEPENDENCIES_DEFINES HAVE_RENDER_DX9)
+#    list(APPEND DEPENDENCIES_LIBRARIES d3d9)
+#    message(STATUS "UI render backend: DirectX 9")
+#  else()
+#    message(FATAL_ERROR "DirectX 9 render backend only for Windows!")
+#  endif()
+#endif()
 
 if (NOT WIN32 AND NOT APPLE)
   CHECK_INCLUDE_FILE(sys/io.h SYS_IO_FOUND)
@@ -967,6 +1018,7 @@ if (BUILD_GUI)
   list(APPEND DEPENDENCIES_INCLUDE_DIRS
     extern/imgui_patched
     extern/imgui_patched/backends
+    extern/imgui_software_renderer
     extern/igfd
   )
   if (WIN32 OR APPLE)
@@ -1045,7 +1097,6 @@ else()
 endif()
 
 target_include_directories(furnace SYSTEM PRIVATE ${DEPENDENCIES_INCLUDE_DIRS})
-target_compile_definitions(furnace PRIVATE ${DEPENDENCIES_DEFINES})
 target_compile_options(furnace PRIVATE ${DEPENDENCIES_COMPILE_OPTIONS})
 target_link_libraries(furnace PRIVATE ${DEPENDENCIES_LIBRARIES})
 if (PKG_CONFIG_FOUND AND (SYSTEM_FMT OR SYSTEM_LIBSNDFILE OR SYSTEM_ZLIB OR SYSTEM_SDL2 OR SYSTEM_RTMIDI OR WITH_JACK))
@@ -1098,9 +1149,9 @@ if (NOT ANDROID OR TERMUX)
       if (WITH_WAVETABLES)
         install(DIRECTORY wavetables DESTINATION ${FURNACE_DATADIR})
       endif()
-      add_compile_definitions(FURNACE_DATADIR="${FURNACE_DATADIR}")
+      list(APPEND DEPENDENCIES_DEFINES FURNACE_DATADIR="${FURNACE_DATADIR}")
       if (SHOW_OPEN_ASSETS_MENU_ENTRY)
-        add_compile_definitions(SHOW_OPEN_ASSETS_MENU_ENTRY)
+        list(APPEND DEPENDENCIES_DEFINES SHOW_OPEN_ASSETS_MENU_ENTRY)
       endif()
     endif()
     foreach(num 16 32 64 128 256 512)
@@ -1131,3 +1182,5 @@ if (NOT ANDROID OR TERMUX)
   
   include(CPack)
 endif()
+
+target_compile_definitions(furnace PRIVATE ${DEPENDENCIES_DEFINES})

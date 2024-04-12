@@ -498,7 +498,7 @@ void FurnaceGUI::drawSampleEdit() {
               if (ImGui::Selectable(sampleDepths[i])) {
                 sample->prepareUndo(true);
                 e->lockEngine([this,sample,i]() {
-                  sample->convert((DivSampleDepth)i);
+                  sample->convert((DivSampleDepth)i,e->getSampleFormatMask());
                   e->renderSamples(curSample);
                 });
                 updateSampleTex=true;
@@ -1589,7 +1589,7 @@ void FurnaceGUI::drawSampleEdit() {
           updateSampleTex=false;
         }
 
-        ImGui::ImageButton(rend->getTextureID(sampleTex),avail,ImVec2(0,0),ImVec2(1,1),0);
+        ImGui::ImageButton(rend->getTextureID(sampleTex),avail,ImVec2(0,0),ImVec2(rend->getTextureU(sampleTex),rend->getTextureV(sampleTex)),0);
 
         ImVec2 rectMin=ImGui::GetItemRectMin();
         ImVec2 rectMax=ImGui::GetItemRectMax();
