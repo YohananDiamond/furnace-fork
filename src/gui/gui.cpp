@@ -1647,7 +1647,7 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
       if (!dirExists(workingDirSong)) workingDirSong=getHomeDir();
       hasOpened=fileDialog->openLoad(
         "Open File",
-        {"compatible files", "*.fur *.dmf *.mod *.fc13 *.fc14 *.smod *.fc *.ftm *.0cc *.dnm *.eft *.fub",
+        {"compatible files", "*.fur *.dmf *.mod *.fc13 *.fc14 *.smod *.fc *.ftm *.0cc *.dnm *.eft *.fub *.tfe",
          "all files", "*"},
         workingDirSong,
         dpiScale
@@ -4391,7 +4391,7 @@ bool FurnaceGUI::loop() {
           toggleMobileUI(!mobileUI);
         }
 #endif
-        if (ImGui::MenuItem("manage presets...",BIND_FOR(GUI_ACTION_WINDOW_USER_PRESETS))) {
+        if (ImGui::MenuItem("user systems...",BIND_FOR(GUI_ACTION_WINDOW_USER_PRESETS))) {
           userPresetsOpen=true;
         }
         if (ImGui::MenuItem("settings...",BIND_FOR(GUI_ACTION_WINDOW_SETTINGS))) {
@@ -6455,7 +6455,7 @@ bool FurnaceGUI::loop() {
       }
     }
 
-    if (!settings.renderClearPos) {
+    if (!settings.renderClearPos || renderBackend==GUI_BACKEND_METAL) {
       rend->clear(uiColors[GUI_COLOR_BACKGROUND]);
     }
     renderTimeBegin=SDL_GetPerformanceCounter();
@@ -6496,7 +6496,7 @@ bool FurnaceGUI::loop() {
       }
     }
     rend->present();
-    if (settings.renderClearPos) {
+    if (settings.renderClearPos && renderBackend!=GUI_BACKEND_METAL) {
       rend->clear(uiColors[GUI_COLOR_BACKGROUND]);
     }
     swapTimeEnd=SDL_GetPerformanceCounter();

@@ -75,12 +75,17 @@ enum FurnaceGUIRenderBackend {
   GUI_BACKEND_GL1,
   GUI_BACKEND_DX11,
   GUI_BACKEND_DX9,
+  GUI_BACKEND_METAL,
   GUI_BACKEND_SOFTWARE
 };
 
 #ifdef HAVE_RENDER_DX11
 #define GUI_BACKEND_DEFAULT GUI_BACKEND_DX11
 #define GUI_BACKEND_DEFAULT_NAME "DirectX 11"
+#else
+#ifdef HAVE_RENDER_METAL
+#define GUI_BACKEND_DEFAULT GUI_BACKEND_METAL
+#define GUI_BACKEND_DEFAULT_NAME "Metal"
 #else
 #ifdef HAVE_RENDER_GL
 #ifdef SUPPORT_XP
@@ -102,6 +107,7 @@ enum FurnaceGUIRenderBackend {
 #else
 #define GUI_BACKEND_DEFAULT GUI_BACKEND_SOFTWARE
 #define GUI_BACKEDN_DEFAULT_NAME "Software"
+#endif
 #endif
 #endif
 #endif
@@ -313,6 +319,8 @@ enum FurnaceGUIColors {
   GUI_COLOR_INSTR_NDS,
   GUI_COLOR_INSTR_GBA_DMA,
   GUI_COLOR_INSTR_GBA_MINMOD,
+  GUI_COLOR_INSTR_BIFURCATOR,
+  GUI_COLOR_INSTR_SID2,
   GUI_COLOR_INSTR_UNKNOWN,
 
   GUI_COLOR_CHANNEL_BG,
@@ -1259,6 +1267,7 @@ struct FurnaceGUISysDef {
   String definition;
   std::vector<FurnaceGUISysDefChip> orig;
   std::vector<FurnaceGUISysDef> subDefs;
+  void bake();
   FurnaceGUISysDef(const char* n, std::initializer_list<FurnaceGUISysDefChip> def, const char* e=NULL);
   FurnaceGUISysDef(const char* n, const char* def, DivEngine* e);
 };
@@ -2084,7 +2093,7 @@ class FurnaceGUI {
       displayRenderTime(0),
       maxUndoSteps(100),
       vibrationStrength(0.5f),
-      vibrationLength(100),
+      vibrationLength(20),
       mainFontPath(""),
       headFontPath(""),
       patFontPath(""),

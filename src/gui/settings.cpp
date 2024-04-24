@@ -405,6 +405,12 @@ void FurnaceGUI::drawSettings() {
             settingsChanged=true;
           }
 #endif
+#ifdef HAVE_RENDER_METAL
+          if (ImGui::Selectable("Metal",curRenderBackend=="Metal")) {
+            settings.renderBackend="Metal";
+            settingsChanged=true;
+          }
+#endif
 #ifdef HAVE_RENDER_GL
 #ifdef USE_GLES
           if (ImGui::Selectable("OpenGL ES 2.0",curRenderBackend=="OpenGL ES 2.0")) {
@@ -482,13 +488,15 @@ void FurnaceGUI::drawSettings() {
           settingsChanged=true;
         }
 
-        bool renderClearPosB=settings.renderClearPos;
-        if (ImGui::Checkbox("Late render clear",&renderClearPosB)) {
-          settings.renderClearPos=renderClearPosB;
-          settingsChanged=true;
-        }
-        if (ImGui::IsItemHovered()) {
-          ImGui::SetTooltip("calls rend->clear() after rend->present(). might reduce UI latency by one frame in some drivers.");
+        if (settings.renderBackend!="Metal") {
+          bool renderClearPosB=settings.renderClearPos;
+          if (ImGui::Checkbox("Late render clear",&renderClearPosB)) {
+            settings.renderClearPos=renderClearPosB;
+            settingsChanged=true;
+          }
+          if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("calls rend->clear() after rend->present(). might reduce UI latency by one frame in some drivers.");
+          }
         }
 
         bool powerSaveB=settings.powerSave;
@@ -3744,6 +3752,8 @@ void FurnaceGUI::drawSettings() {
           UI_COLOR_CONFIG(GUI_COLOR_INSTR_NDS,"Nintendo DS");
           UI_COLOR_CONFIG(GUI_COLOR_INSTR_GBA_DMA,"GBA DMA");
           UI_COLOR_CONFIG(GUI_COLOR_INSTR_GBA_MINMOD,"GBA MinMod");
+          UI_COLOR_CONFIG(GUI_COLOR_INSTR_BIFURCATOR,"Bifurcator");
+          UI_COLOR_CONFIG(GUI_COLOR_INSTR_SID2,"SID2");
           UI_COLOR_CONFIG(GUI_COLOR_INSTR_UNKNOWN,"Other/Unknown");
           ImGui::TreePop();
         }
@@ -4104,7 +4114,7 @@ void FurnaceGUI::readConfig(DivConfig& conf, FurnaceGUISettingGroups groups) {
     settings.centerPopup=conf.getInt("centerPopup",1);
 
     settings.vibrationStrength=conf.getFloat("vibrationStrength",0.5f);
-    settings.vibrationLength=conf.getInt("vibrationLength",100);
+    settings.vibrationLength=conf.getInt("vibrationLength",20);
   }
 
   if (groups&GUI_SETTINGS_AUDIO) {
@@ -5430,10 +5440,12 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
     }
   }
   
-  // chan osc work pool
-  if (chanOscWorkPool!=NULL) {
-    delete chanOscWorkPool;
-    chanOscWorkPool=NULL;
+  if (updateFonts) {
+    // chan osc work pool
+    if (chanOscWorkPool!=NULL) {
+      delete chanOscWorkPool;
+      chanOscWorkPool=NULL;
+    }
   }
 
   for (int i=0; i<64; i++) {
