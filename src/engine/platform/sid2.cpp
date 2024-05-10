@@ -133,6 +133,7 @@ void DivPlatformSID2::tick(bool sysTick) {
       } else {
         chan[i].duty-=chan[i].std.duty.val;
       }
+      chan[i].duty&=4095;
       rWrite(i*7+2,chan[i].duty&0xff);
       rWrite(i*7+3,(chan[i].duty>>8) | (chan[i].outVol << 4));
     }
@@ -312,8 +313,6 @@ int DivPlatformSID2::dispatch(DivCommand c) {
 
         chan[c.chan].noise_mode = ins->sid2.noiseMode;
         chan[c.chan].mix_mode = ins->sid2.mixMode;
-
-        chan[c.chan].outVol=ins->sid2.volume;
       }
       if (chan[c.chan].insChanged || chan[c.chan].resetFilter) {
         chan[c.chan].filter=ins->c64.toFilter;

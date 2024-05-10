@@ -1529,7 +1529,7 @@ void FurnaceGUI::keyDown(SDL_Event& ev) {
       }
       // pattern input otherwise
       if (mapped&(FURKMOD_ALT|FURKMOD_CTRL|FURKMOD_META|FURKMOD_SHIFT)) break;
-      if (!ev.key.repeat) {
+      if (!ev.key.repeat || settings.inputRepeat) {
         if (cursor.xFine==0) { // note
           auto it=noteKeys.find(ev.key.keysym.scancode);
           if (it!=noteKeys.cend()) {
@@ -1961,11 +1961,30 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
       );
       break;
     case GUI_FILE_IMPORT_LAYOUT:
-      if (!dirExists(workingDirKeybinds)) workingDirKeybinds=getHomeDir();
+      if (!dirExists(workingDirLayout)) workingDirLayout=getHomeDir();
       hasOpened=fileDialog->openLoad(
         "Select Layout File",
         {".ini files", "*.ini"},
-        workingDirKeybinds,
+        workingDirLayout,
+        dpiScale
+      );
+      break;
+    case GUI_FILE_IMPORT_USER_PRESETS:
+    case GUI_FILE_IMPORT_USER_PRESETS_REPLACE:
+      if (!dirExists(workingDirConfig)) workingDirConfig=getHomeDir();
+      hasOpened=fileDialog->openLoad(
+        "Select User Presets File",
+        {"configuration files", "*.cfgu"},
+        workingDirConfig,
+        dpiScale
+      );
+      break;
+    case GUI_FILE_IMPORT_CONFIG:
+      if (!dirExists(workingDirConfig)) workingDirConfig=getHomeDir();
+      hasOpened=fileDialog->openLoad(
+        "Select Settings File",
+        {"configuration files", "*.cfg"},
+        workingDirConfig,
         dpiScale
       );
       break;
@@ -1988,11 +2007,29 @@ void FurnaceGUI::openFileDialog(FurnaceGUIFileDialogs type) {
       );
       break;
     case GUI_FILE_EXPORT_LAYOUT:
-      if (!dirExists(workingDirKeybinds)) workingDirKeybinds=getHomeDir();
+      if (!dirExists(workingDirLayout)) workingDirLayout=getHomeDir();
       hasOpened=fileDialog->openSave(
         "Export Layout",
         {".ini files", "*.ini"},
-        workingDirKeybinds,
+        workingDirLayout,
+        dpiScale
+      );
+      break;
+    case GUI_FILE_EXPORT_USER_PRESETS:
+      if (!dirExists(workingDirConfig)) workingDirConfig=getHomeDir();
+      hasOpened=fileDialog->openSave(
+        "Export User Presets",
+        {"configuration files", "*.cfgu"},
+        workingDirConfig,
+        dpiScale
+      );
+      break;
+    case GUI_FILE_EXPORT_CONFIG:
+      if (!dirExists(workingDirConfig)) workingDirConfig=getHomeDir();
+      hasOpened=fileDialog->openSave(
+        "Export Settings",
+        {"configuration files", "*.cfg"},
+        workingDirConfig,
         dpiScale
       );
       break;
@@ -4677,6 +4714,7 @@ bool FurnaceGUI::loop() {
       MEASURE(regView,drawRegView());
       MEASURE(memory,drawMemory());
       MEASURE(userPresets,drawUserPresets());
+      MEASURE(patManager,drawPatManager());
     } else {
       globalWinFlags=0;
       ImGui::DockSpaceOverViewport(NULL,lockLayout?(ImGuiDockNodeFlags_NoWindowMenuButton|ImGuiDockNodeFlags_NoMove|ImGuiDockNodeFlags_NoResize|ImGuiDockNodeFlags_NoCloseButton|ImGuiDockNodeFlags_NoDocking|ImGuiDockNodeFlags_NoDockingSplitMe|ImGuiDockNodeFlags_NoDockingSplitOther):0);
@@ -4852,6 +4890,13 @@ bool FurnaceGUI::loop() {
         case GUI_FILE_EXPORT_LAYOUT:
           workingDirLayout=fileDialog->getPath()+DIR_SEPARATOR_STR;
           break;
+        case GUI_FILE_IMPORT_USER_PRESETS:
+        case GUI_FILE_IMPORT_USER_PRESETS_REPLACE:
+        case GUI_FILE_EXPORT_USER_PRESETS:
+        case GUI_FILE_IMPORT_CONFIG:
+        case GUI_FILE_EXPORT_CONFIG:
+          workingDirConfig=fileDialog->getPath()+DIR_SEPARATOR_STR;
+          break;
         case GUI_FILE_YRW801_ROM_OPEN:
         case GUI_FILE_TG100_ROM_OPEN:
         case GUI_FILE_MU5_ROM_OPEN:
@@ -4936,6 +4981,12 @@ bool FurnaceGUI::loop() {
           }
           if (curFileDialog==GUI_FILE_EXPORT_LAYOUT) {
             checkExtension(".ini");
+          }
+          if (curFileDialog==GUI_FILE_EXPORT_USER_PRESETS) {
+            checkExtension(".cfgu");
+          }
+          if (curFileDialog==GUI_FILE_EXPORT_CONFIG) {
+            checkExtension(".cfg");
           }
           String copyOfName=fileName;
           switch (curFileDialog) {
@@ -5361,6 +5412,19 @@ bool FurnaceGUI::loop() {
             case GUI_FILE_IMPORT_LAYOUT:
               importLayout(copyOfName);
               break;
+            case GUI_FILE_IMPORT_USER_PRESETS:
+              if (!loadUserPresets(false,copyOfName,true)) {
+                showError("could not import user presets!");
+              }
+              break;
+            case GUI_FILE_IMPORT_USER_PRESETS_REPLACE:
+              if (!loadUserPresets(false,copyOfName,false)) {
+                showError(fmt::sprintf("could not import user presets! (%s)",strerror(errno)));
+              }
+              break;
+            case GUI_FILE_IMPORT_CONFIG:
+              importConfig(copyOfName);
+              break;
             case GUI_FILE_EXPORT_COLORS:
               exportColors(copyOfName);
               break;
@@ -5369,6 +5433,14 @@ bool FurnaceGUI::loop() {
               break;
             case GUI_FILE_EXPORT_LAYOUT:
               exportLayout(copyOfName);
+              break;
+            case GUI_FILE_EXPORT_USER_PRESETS:
+              if (!saveUserPresets(false,copyOfName)) {
+                showError(fmt::sprintf("could not import user presets! (%s)",strerror(errno)));
+              }
+              break;
+            case GUI_FILE_EXPORT_CONFIG:
+              exportConfig(copyOfName);
               break;
             case GUI_FILE_YRW801_ROM_OPEN:
               settings.yrw801Path=copyOfName;
@@ -6614,6 +6686,7 @@ bool FurnaceGUI::init() {
   workingDirColors=e->getConfString("lastDirColors",workingDir);
   workingDirKeybinds=e->getConfString("lastDirKeybinds",workingDir);
   workingDirLayout=e->getConfString("lastDirLayout",workingDir);
+  workingDirConfig=e->getConfString("lastDirConfig",workingDir);
   workingDirTest=e->getConfString("lastDirTest",workingDir);
 
   fileDialogBookmarks=e->getConfString("fileDialogBookmarks","");
@@ -6841,8 +6914,8 @@ bool FurnaceGUI::init() {
   scrX=0;
   scrY=0;
 #else
-  scrW=scrConfW=e->getConfInt("lastWindowWidth",1280);
-  scrH=scrConfH=e->getConfInt("lastWindowHeight",800);
+  scrW=scrConfW=e->getConfInt("lastWindowWidth",GUI_WIDTH_DEFAULT);
+  scrH=scrConfH=e->getConfInt("lastWindowHeight",GUI_HEIGHT_DEFAULT);
   scrX=scrConfX=e->getConfInt("lastWindowX",SDL_WINDOWPOS_CENTERED);
   scrY=scrConfY=e->getConfInt("lastWindowY",SDL_WINDOWPOS_CENTERED);
   scrMax=e->getConfBool("lastWindowMax",false);
@@ -6895,29 +6968,35 @@ bool FurnaceGUI::init() {
   logV("window size: %dx%d",scrW,scrH);
 
   if (!initRender()) {
-    if (settings.renderBackend!="SDL") {
-      settings.renderBackend="SDL";
-      e->setConf("renderBackend","SDL");
+    if (settings.renderBackend!="Software") {
+      settings.renderBackend="Software";
+      e->setConf("renderBackend","Software");
       e->saveConf();
-      lastError=fmt::sprintf("could not init renderer!\r\nthe render backend has been set to a safe value. please restart Furnace.");
+      lastError=fmt::sprintf("could not init renderer!\r\nfalling back to software renderer. please restart Furnace.");
+    } else if (settings.renderBackend=="SDL") {
+      lastError=fmt::sprintf("could not init renderer! %s\r\nfalling back to software renderer. please restart Furnace.",SDL_GetError());
+      settings.renderBackend="Software";
+      e->setConf("renderBackend","Software");
+      e->saveConf();
     } else {
-      lastError=fmt::sprintf("could not init renderer! %s",SDL_GetError());
-      if (!settings.renderDriver.empty()) {
-        settings.renderDriver="";
-        e->setConf("renderDriver","");
-        e->saveConf();
-        lastError+=fmt::sprintf("\r\nthe render driver has been set to a safe value. please restart Furnace.");
-      }
+      lastError=fmt::sprintf("could not init renderer!");
     }
     return false;
   }
 
-  rend->preInit();
+  rend->preInit(e->getConfObject());
 
   logD("creating window...");
   sdlWin=SDL_CreateWindow("Furnace",scrX,scrY,scrW,scrH,SDL_WINDOW_RESIZABLE|SDL_WINDOW_ALLOW_HIGHDPI|(scrMax?SDL_WINDOW_MAXIMIZED:0)|(fullScreen?SDL_WINDOW_FULLSCREEN_DESKTOP:0)|rend->getWindowFlags());
   if (sdlWin==NULL) {
-    lastError=fmt::sprintf("could not open window! %s",SDL_GetError());
+    const char* sdlErr=SDL_GetError();
+    lastError=fmt::sprintf("could not open window! %s",sdlErr);
+    if (settings.renderBackend!="Software" && strcmp(sdlErr,"No matching GL pixel format available")==0) {
+      settings.renderBackend="Software";
+      e->setConf("renderBackend","Software");
+      e->saveConf();
+      lastError+="\r\nfalling back to software renderer. please restart Furnace.";
+    }
     return false;
   }
 
@@ -6997,19 +7076,18 @@ bool FurnaceGUI::init() {
   logD("starting render backend...");
   if (!rend->init(sdlWin,settings.vsync)) {
     logE("it failed...");
-    if (settings.renderBackend!="SDL") {
-      settings.renderBackend="SDL";
-      e->setConf("renderBackend","SDL");
+    if (settings.renderBackend!="Software") {
+      settings.renderBackend="Software";
+      e->setConf("renderBackend","Software");
       e->saveConf();
-      lastError=fmt::sprintf("could not init renderer!\r\nthe render backend has been set to a safe value. please restart Furnace.");
+      lastError=fmt::sprintf("could not init renderer!\r\nfalling back to software renderer. please restart Furnace.");
+    } else if (settings.renderBackend=="SDL") {
+      lastError=fmt::sprintf("could not init renderer! %s\r\nfalling back to software renderer. please restart Furnace.",SDL_GetError());
+      settings.renderBackend="Software";
+      e->setConf("renderBackend","Software");
+      e->saveConf();
     } else {
-      lastError=fmt::sprintf("could not init renderer! %s",SDL_GetError());
-      if (!settings.renderDriver.empty()) {
-        settings.renderDriver="";
-        e->setConf("renderDriver","");
-        e->saveConf();
-        lastError+=fmt::sprintf("\r\nthe render driver has been set to a safe value. please restart Furnace.");
-      }
+      lastError=fmt::sprintf("could not init renderer!");
     }
     return false;
   }
@@ -7175,6 +7253,7 @@ void FurnaceGUI::commitState() {
   e->setConf("lastDirColors",workingDirColors);
   e->setConf("lastDirKeybinds",workingDirKeybinds);
   e->setConf("lastDirLayout",workingDirLayout);
+  e->setConf("lastDirConfig",workingDirConfig);
   e->setConf("lastDirTest",workingDirTest);
 
   if (fileDialog!=NULL) {
@@ -7418,6 +7497,7 @@ FurnaceGUI::FurnaceGUI():
   snesFilterHex(false),
   modTableHex(false),
   displayEditString(false),
+  changeCoarse(false),
   mobileEdit(false),
   killGraphics(false),
   safeMode(false),
@@ -7469,12 +7549,12 @@ FurnaceGUI::FurnaceGUI():
   postWarnAction(GUI_WARN_GENERIC),
   mobScene(GUI_SCENE_PATTERN),
   fileDialog(NULL),
-  scrW(1280),
-  scrH(800),
-  scrConfW(1280),
-  scrConfH(800),
-  canvasW(1280),
-  canvasH(800),
+  scrW(GUI_WIDTH_DEFAULT),
+  scrH(GUI_HEIGHT_DEFAULT),
+  scrConfW(GUI_WIDTH_DEFAULT),
+  scrConfH(GUI_HEIGHT_DEFAULT),
+  canvasW(GUI_WIDTH_DEFAULT),
+  canvasH(GUI_HEIGHT_DEFAULT),
   scrX(SDL_WINDOWPOS_CENTERED),
   scrY(SDL_WINDOWPOS_CENTERED),
   scrConfX(SDL_WINDOWPOS_CENTERED),
@@ -7507,6 +7587,7 @@ FurnaceGUI::FurnaceGUI():
   prevIns(0),
   oldRow(0),
   editStep(1),
+  editStepCoarse(16),
   exportLoops(0),
   soloChan(-1),
   orderEditMode(0),

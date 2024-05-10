@@ -24,7 +24,8 @@ struct FurnaceGUIRenderMetalPrivate;
 class FurnaceGUIRenderMetal: public FurnaceGUIRender {
   SDL_Renderer* sdlRend;
   FurnaceGUIRenderMetalPrivate* priv;
-  bool swapIntervalSet;
+  bool swapIntervalSet, bigTextures;
+  String vendorName, deviceName, apiVersion;
   public:
     ImTextureID getTextureID(FurnaceGUITexture* which);
     bool lockTexture(FurnaceGUITexture* which, void** data, int* pitch);
@@ -44,8 +45,14 @@ class FurnaceGUIRenderMetal: public FurnaceGUIRender {
     void present();
     bool getOutputSize(int& w, int& h);
     int getWindowFlags();
+    int getMaxTextureWidth();
+    int getMaxTextureHeight();
+    const char* getBackendName();
+    const char* getVendorName();
+    const char* getDeviceName();
+    const char* getAPIVersion();
     void setSwapInterval(int swapInterval);
-    void preInit();
+    void preInit(const DivConfig& conf);
     bool init(SDL_Window* win, int swapInterval);
     void initGUI(SDL_Window* win);
     void quitGUI();
@@ -53,5 +60,9 @@ class FurnaceGUIRenderMetal: public FurnaceGUIRender {
     FurnaceGUIRenderMetal():
       sdlRend(NULL),
       priv(NULL),
-      swapIntervalSet(false) {}
+      swapIntervalSet(false),
+      bigTextures(false),
+      vendorName("Unknown"),
+      deviceName("Unknown Graphics Device"),
+      apiVersion("???") {}
 };

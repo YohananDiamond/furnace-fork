@@ -42,6 +42,12 @@ typedef HRESULT (WINAPI *SPDA)(PROCESS_DPI_AWARENESS);
 struct sigaction termsa;
 #endif
 
+#ifdef SUPPORT_XP
+#define TUT_INTRO_PLAYED true
+#else
+#define TUT_INTRO_PLAYED false
+#endif
+
 #include "cli/cli.h"
 
 #ifdef HAVE_GUI
@@ -228,6 +234,7 @@ TAParamResult pVersion(String) {
   printf("- YM3812-LLE by nukeykt (GPLv2)\n");
   printf("- YMF262-LLE by nukeykt (GPLv2)\n");
   printf("- YMF276-LLE by nukeykt (GPLv2)\n");
+  printf("- YM2608-LLE by nukeykt (GPLv2)\n");
   printf("- ESFMu (modified version) by Kagamiin~ (LGPLv2.1)\n");
   printf("- ymfm by Aaron Giles (BSD 3-clause)\n");
   printf("- emu2413 by Digital Sound Antiques (MIT)\n");
@@ -444,12 +451,13 @@ int main(int argc, char** argv) {
 
   // Windows console thing - thanks dj.tuBIG/MaliceX
 #ifdef _WIN32
-
+#ifndef TA_SUBSYSTEM_CONSOLE
   if (AttachConsole(ATTACH_PARENT_PROCESS)) {
     freopen("CONOUT$", "w", stdout);
     freopen("CONOUT$", "w", stderr);
     freopen("CONIN$", "r", stdin);
   }
+#endif
 #endif
 
   srand(time(NULL));
@@ -581,7 +589,7 @@ int main(int argc, char** argv) {
     e.setAudio(DIV_AUDIO_DUMMY);
   }
 
-  if (!fileName.empty() && ((!e.getConfBool("tutIntroPlayed",false)) || e.getConfInt("alwaysPlayIntro",0)!=3 || consoleMode || benchMode || infoMode || outName!="" || vgmOutName!="" || cmdOutName!="")) {
+  if (!fileName.empty() && ((!e.getConfBool("tutIntroPlayed",TUT_INTRO_PLAYED)) || e.getConfInt("alwaysPlayIntro",0)!=3 || consoleMode || benchMode || infoMode || outName!="" || vgmOutName!="" || cmdOutName!="")) {
     logI("loading module...");
     FILE* f=ps_fopen(fileName.c_str(),"rb");
     if (f==NULL) {

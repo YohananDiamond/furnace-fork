@@ -1,6 +1,7 @@
-# to-do for 0.6.3
+# to-do for 0.6.4
 
-- 9xxx for more chips
+- fix possible issues when moving selection
+- fix Metal intro crash
 
 # to-do long term
 

@@ -886,6 +886,10 @@ bool FurnaceGUI::drawSysConf(int chan, int sysPos, DivSystem type, DivConfig& fl
         clockSel=2;
         altered=true;
       }
+      if (ImGui::RadioButton("1.99MHz (PC-88)",clockSel==15)) {
+        clockSel=15;
+        altered=true;
+      }
       if (ImGui::RadioButton("2MHz (Atari ST/Sharp X1)",clockSel==3)) {
         clockSel=3;
         altered=true;
@@ -2432,6 +2436,7 @@ bool FurnaceGUI::drawSysConf(int chan, int sysPos, DivSystem type, DivConfig& fl
     case DIV_SYSTEM_VERA:
     case DIV_SYSTEM_C219:
     case DIV_SYSTEM_BIFURCATOR:
+    case DIV_SYSTEM_POWERNOISE:
       break;
     case DIV_SYSTEM_YMU759:
     case DIV_SYSTEM_ESFM:
