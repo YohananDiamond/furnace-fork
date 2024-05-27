@@ -65,11 +65,13 @@ class FurnaceGLTexture: public FurnaceGUITexture {
   public:
   GLuint id;
   int width, height;
+  FurnaceGUITextureFormat format;
   unsigned char* lockedData;
   FurnaceGLTexture():
     id(0),
     width(0),
     height(0),
+    format(GUI_TEXFORMAT_UNKNOWN),
     lockedData(NULL) {}
 };
 
@@ -281,6 +283,11 @@ ImTextureID FurnaceGUIRenderGL::getTextureID(FurnaceGUITexture* which) {
   return (ImTextureID)ret;
 }
 
+FurnaceGUITextureFormat FurnaceGUIRenderGL::getTextureFormat(FurnaceGUITexture* which) {
+  FurnaceGLTexture* t=(FurnaceGLTexture*)which;
+  return t->format;
+}
+
 bool FurnaceGUIRenderGL::lockTexture(FurnaceGUITexture* which, void** data, int* pitch) {
   FurnaceGLTexture* t=(FurnaceGLTexture*)which;
   if (t->lockedData!=NULL) return false;
@@ -315,7 +322,11 @@ bool FurnaceGUIRenderGL::updateTexture(FurnaceGUITexture* which, void* data, int
   return true;
 }
 
-FurnaceGUITexture* FurnaceGUIRenderGL::createTexture(bool dynamic, int width, int height, bool interpolate) {
+FurnaceGUITexture* FurnaceGUIRenderGL::createTexture(bool dynamic, int width, int height, bool interpolate, FurnaceGUITextureFormat format) {
+  if (format!=GUI_TEXFORMAT_ABGR32) {
+    logE("unsupported texture format!");
+    return NULL;
+  }
   FurnaceGLTexture* t=new FurnaceGLTexture;
   C(glGenTextures(1,&t->id));
   C(glBindTexture(GL_TEXTURE_2D,t->id));
@@ -330,6 +341,7 @@ FurnaceGUITexture* FurnaceGUIRenderGL::createTexture(bool dynamic, int width, in
   C(furActiveTexture(GL_TEXTURE0));
   t->width=width;
   t->height=height;
+  t->format=format;
   return t;
 }
 
@@ -554,6 +566,10 @@ int FurnaceGUIRenderGL::getMaxTextureHeight() {
   return maxHeight;
 }
 
+unsigned int FurnaceGUIRenderGL::getTextureFormats() {
+  return GUI_TEXFORMAT_ABGR32;
+}
+
 const char* FurnaceGUIRenderGL::getBackendName() {
   return backendName.c_str();
 }
@@ -609,6 +625,8 @@ void FurnaceGUIRenderGL::preInit(const DivConfig& conf) {
   SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE,conf.getInt("glAlphaSize",0));
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER,conf.getInt("glDoubleBuffer",1));
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE,conf.getInt("glDepthSize",24));
+  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE,conf.getInt("glStencilSize",0));
+  SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE,conf.getInt("glBufferSize",32));
 }
 
 #define LOAD_PROC_MANDATORY(_v,_t,_s) \

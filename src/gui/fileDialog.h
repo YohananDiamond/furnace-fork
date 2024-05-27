@@ -52,8 +52,8 @@ class FurnaceGUIFileDialog {
   public:
     bool mobileUI;
     String bookmarks;
-    bool openLoad(String header, std::vector<String> filter, String path, double dpiScale, FileDialogSelectCallback clickCallback=NULL, bool allowMultiple=false);
-    bool openSave(String header, std::vector<String> filter, String path, double dpiScale);
+    bool openLoad(String header, std::vector<String> filter, String path, double dpiScale, FileDialogSelectCallback clickCallback=NULL, bool allowMultiple=false, String hint="");
+    bool openSave(String header, std::vector<String> filter, String path, double dpiScale, String hint="");
     bool accepted();
     void close();
     bool render(const ImVec2& min, const ImVec2& max);

@@ -7,7 +7,7 @@ Current state:
 - [enabled IGFD bookmarks](https://github.com/tildearrow/furnace/pull/1140): closed, pending fixes to IGFD
 - [command palette](https://github.com/tildearrow/furnace/pull/1160): MERGED!
 
-These features at available at the main branch (`yohanan`), which I compile using [my PKGBUILD](https://github.com/YohananDiamond/dotfiles/blob/master/pkgbuilds/furnace.PKGBUILD)
+These features at available at the `yohanan` branch, which I compile using [my PKGBUILD](https://github.com/YohananDiamond/dotfiles/blob/master/pkgbuilds/furnace.PKGBUILD)
 
 Any contributions not related to this should go to tildearrow's repo, though :P
 
