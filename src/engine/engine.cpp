@@ -83,6 +83,10 @@ const char* DivEngine::getEffectDesc(unsigned char effect, int chan, bool notNul
       return _("81xx: Set panning (left channel)");
     case 0x82:
       return _("82xx: Set panning (right channel)");
+    case 0x83:
+      return _("83xy: Panning slide (x0: left; 0y: right)");
+    case 0x84:
+      return _("84xy: Panbrello (x: speed; y: depth)");
     case 0x88:
       return _("88xy: Set panning (rear channels; x: left; y: right)");
       break;
@@ -94,6 +98,8 @@ const char* DivEngine::getEffectDesc(unsigned char effect, int chan, bool notNul
       break;
     case 0xc0: case 0xc1: case 0xc2: case 0xc3:
       return _("Cxxx: Set tick rate (hz)");
+    case 0xdc:
+      return _("DCxx: Delayed mute");
     case 0xe0:
       return _("E0xx: Set arp speed");
     case 0xe1:
@@ -188,79 +194,8 @@ const char* DivEngine::getEffectDesc(unsigned char effect, int chan, bool notNul
 }
 
 void DivEngine::walkSong(int& loopOrder, int& loopRow, int& loopEnd) {
-  loopOrder=0;
-  loopRow=0;
-  loopEnd=-1;
-  int nextOrder=-1;
-  int nextRow=0;
-  int effectVal=0;
-  int lastSuspectedLoopEnd=-1;
-  DivPattern* pat[DIV_MAX_CHANS];
-  unsigned char wsWalked[8192];
-  memset(wsWalked,0,8192);
-  for (int i=0; i<curSubSong->ordersLen; i++) {
-    for (int j=0; j<chans; j++) {
-      pat[j]=curPat[j].getPattern(curOrders->ord[j][i],false);
-    }
-    if (i>lastSuspectedLoopEnd) {
-      lastSuspectedLoopEnd=i;
-    }
-    for (int j=nextRow; j<curSubSong->patLen; j++) {
-      nextRow=0;
-      bool changingOrder=false;
-      bool jumpingOrder=false;
-      if (wsWalked[((i<<5)+(j>>3))&8191]&(1<<(j&7))) {
-        loopOrder=i;
-        loopRow=j;
-        loopEnd=lastSuspectedLoopEnd;
-        return;
-      }
-      for (int k=0; k<chans; k++) {
-        for (int l=0; l<curPat[k].effectCols; l++) {
-          effectVal=pat[k]->data[j][5+(l<<1)];
-          if (effectVal<0) effectVal=0;
-          if (pat[k]->data[j][4+(l<<1)]==0x0d) {
-            if (song.jumpTreatment==2) {
-              if ((i<curSubSong->ordersLen-1 || !song.ignoreJumpAtEnd)) {
-                nextOrder=i+1;
-                nextRow=effectVal;
-                jumpingOrder=true;
-              }
-            } else if (song.jumpTreatment==1) {
-              if (nextOrder==-1 && (i<curSubSong->ordersLen-1 || !song.ignoreJumpAtEnd)) {
-                nextOrder=i+1;
-                nextRow=effectVal;
-                jumpingOrder=true;
-              }
-            } else {
-              if ((i<curSubSong->ordersLen-1 || !song.ignoreJumpAtEnd)) {
-                if (!changingOrder) {
-                  nextOrder=i+1;
-                }
-                jumpingOrder=true;
-                nextRow=effectVal;
-              }
-            }
-          } else if (pat[k]->data[j][4+(l<<1)]==0x0b) {
-            if (nextOrder==-1 || song.jumpTreatment==0) {
-              nextOrder=effectVal;
-              if (song.jumpTreatment==1 || song.jumpTreatment==2 || !jumpingOrder) {
-                nextRow=0;
-              }
-              changingOrder=true;
-            }
-          }
-        }
-      }
-
-      wsWalked[((i<<5)+(j>>3))&8191]|=1<<(j&7);
-      
-      if (nextOrder!=-1) {
-        i=nextOrder-1;
-        nextOrder=-1;
-        break;
-      }
-    }
+  if (curSubSong!=NULL) {
+    curSubSong->walk(loopOrder,loopRow,loopEnd,chans,song.jumpTreatment,song.ignoreJumpAtEnd);
   }
 }
 
@@ -2388,6 +2323,13 @@ int DivEngine::mapVelocity(int ch, float vel) {
   if (ch>=chans) return 0;
   if (disCont[dispatchOfChan[ch]].dispatch==NULL) return 0;
   return disCont[dispatchOfChan[ch]].dispatch->mapVelocity(dispatchChanOfChan[ch],vel);
+}
+
+float DivEngine::getGain(int ch, int vol) {
+  if (ch<0) return 0;
+  if (ch>=chans) return 0;
+  if (disCont[dispatchOfChan[ch]].dispatch==NULL) return 0;
+  return disCont[dispatchOfChan[ch]].dispatch->getGain(dispatchChanOfChan[ch],vol);
 }
 
 unsigned char DivEngine::getOrder() {

@@ -52,10 +52,10 @@ class DivWorkPool;
 #define EXTERN_BUSY_BEGIN_SOFT e->softLocked=true; e->isBusy.lock();
 #define EXTERN_BUSY_END e->isBusy.unlock(); e->softLocked=false;
 
-//#define DIV_UNSTABLE
+#define DIV_UNSTABLE
 
-#define DIV_VERSION "0.6.5"
-#define DIV_ENGINE_VERSION 214
+#define DIV_VERSION "Import Test"
+#define DIV_ENGINE_VERSION 216
 // for imports
 #define DIV_VERSION_MOD 0xff01
 #define DIV_VERSION_FC 0xff02
@@ -133,10 +133,11 @@ struct DivAudioExportOptions {
 struct DivChannelState {
   std::vector<DivDelayedCommand> delayed;
   int note, oldNote, lastIns, pitch, portaSpeed, portaNote;
-  int volume, volSpeed, cut, legatoDelay, legatoTarget, rowDelay, volMax;
+  int volume, volSpeed, cut, volCut, legatoDelay, legatoTarget, rowDelay, volMax;
   int delayOrder, delayRow, retrigSpeed, retrigTick;
   int vibratoDepth, vibratoRate, vibratoPos, vibratoPosGiant, vibratoShape, vibratoFine;
   int tremoloDepth, tremoloRate, tremoloPos;
+  int panDepth, panRate, panPos, panSpeed;
   int sampleOff;
   unsigned char arp, arpStage, arpTicks, panL, panR, panRL, panRR, lastVibrato, lastPorta, cutType;
   bool doNote, legato, portaStop, keyOn, keyOff, nowYouCanStop, stopOnOff, releasing;
@@ -157,6 +158,7 @@ struct DivChannelState {
     volume(0x7f00),
     volSpeed(0),
     cut(-1),
+    volCut(-1),
     legatoDelay(-1),
     legatoTarget(0),
     rowDelay(0),
@@ -174,6 +176,10 @@ struct DivChannelState {
     tremoloDepth(0),
     tremoloRate(0),
     tremoloPos(0),
+    panDepth(0),
+    panRate(0),
+    panPos(0),
+    panSpeed(0),
     sampleOff(0),
     arp(0),
     arpStage(-1),
@@ -918,6 +924,9 @@ class DivEngine {
 
     // map MIDI velocity to volume
     int mapVelocity(int ch, float vel);
+
+    // map volume to gain
+    float getGain(int ch, int vol);
 
     // get current order
     unsigned char getOrder();

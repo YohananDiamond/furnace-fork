@@ -476,6 +476,8 @@ src/baseutils.cpp
 src/fileutils.cpp
 src/utfutils.cpp
 
+extern/itcompress/compression.c
+
 extern/SAASound/src/SAAAmp.cpp
 extern/SAASound/src/SAADevice.cpp
 extern/SAASound/src/SAAEnv.cpp
@@ -1248,7 +1250,7 @@ if (NOT ANDROID OR TERMUX)
     install(DIRECTORY doc DESTINATION ${CMAKE_INSTALL_DOCDIR})
     install(DIRECTORY papers DESTINATION ${CMAKE_INSTALL_DOCDIR}/other)
     install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/furnace)
-    list(APPEND DEPENDENCIES_DEFINES LOCALE_DIR="${CMAKE_INSTALL_LOCALEDIR}")
+    list(APPEND DEPENDENCIES_DEFINES LOCALE_DIR="${CMAKE_INSTALL_FULL_LOCALEDIR}")
     install(DIRECTORY po/locale/ DESTINATION ${CMAKE_INSTALL_LOCALEDIR})
     if (WITH_DEMOS OR WITH_INSTRUMENTS OR WITH_WAVETABLES)
       set(FURNACE_DATADIR ${CMAKE_INSTALL_FULL_DATADIR}/furnace)

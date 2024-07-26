@@ -277,10 +277,15 @@ enum FurnaceGUIColors {
   GUI_COLOR_FM_SSG,
   GUI_COLOR_FM_WAVE,
 
+  GUI_COLOR_MACRO_HIGHLIGHT,
   GUI_COLOR_MACRO_VOLUME,
   GUI_COLOR_MACRO_PITCH,
   GUI_COLOR_MACRO_OTHER,
   GUI_COLOR_MACRO_WAVE,
+  GUI_COLOR_MACRO_NOISE,
+  GUI_COLOR_MACRO_FILTER,
+  GUI_COLOR_MACRO_ENVELOPE,
+  GUI_COLOR_MACRO_GLOBAL,
 
   GUI_COLOR_INSTR_STD,
   GUI_COLOR_INSTR_FM,
@@ -1524,6 +1529,7 @@ class FurnaceGUIRender {
     virtual void drawOsc(float* data, size_t len, ImVec2 pos0, ImVec2 pos1, ImVec4 color, ImVec2 canvasSize, float lineWidth);
     virtual void present();
     virtual bool supportsDrawOsc();
+    virtual bool areTexturesSquare();
     virtual bool getOutputSize(int& w, int& h);
     virtual int getWindowFlags();
     virtual int getMaxTextureWidth();
@@ -1917,7 +1923,6 @@ class FurnaceGUI {
     int wasapiEx;
     int chanOscThreads;
     int renderPoolThreads;
-    int showPool;
     int writeInsNames;
     int readInsNames;
     int fontBackend;
@@ -1947,6 +1952,7 @@ class FurnaceGUI {
     int backupInterval;
     int backupMaxCopies;
     int autoFillSave;
+    int autoMacroStepSize;
     unsigned int maxUndoSteps;
     float vibrationStrength;
     int vibrationLength;
@@ -2173,7 +2179,6 @@ class FurnaceGUI {
       wasapiEx(0),
       chanOscThreads(0),
       renderPoolThreads(0),
-      showPool(0),
       writeInsNames(0),
       readInsNames(1),
       fontBackend(1),
@@ -2203,6 +2208,7 @@ class FurnaceGUI {
       backupInterval(30),
       backupMaxCopies(5),
       autoFillSave(0),
+      autoMacroStepSize(0),
       maxUndoSteps(100),
       vibrationStrength(0.5f),
       vibrationLength(20),
@@ -2746,6 +2752,7 @@ class FurnaceGUI {
   void drawMacros(std::vector<FurnaceGUIMacroDesc>& macros, FurnaceGUIMacroEditState& state);
   void alterSampleMap(int column, int val);
 
+  void insTabFMModernHeader(DivInstrument* ins);
   void insTabFM(DivInstrument* ins);
   void insTabSample(DivInstrument* ins);
 

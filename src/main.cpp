@@ -112,6 +112,7 @@ bool infoMode=false;
 std::vector<TAParam> params;
 
 #ifdef HAVE_LOCALE
+char reqLocaleCopy[64];
 char localeDir[4096];
 
 const char* localeDirs[]={
@@ -322,6 +323,7 @@ TAParamResult pVersion(String) {
   printf("- Stella by Stella Team (GPLv2)\n");
   printf("- vgsound_emu (second version, modified version) by cam900 (zlib license)\n");
   printf("- Impulse Tracker GUS volume table by Jeffrey Lim (BSD 3-clause)\n");
+  printf("- Schism Tracker IT sample decompression (GPLv2)\n");
   printf("- MAME GA20 core by Acho A. Tang, R. Belmont, Valley Bell (BSD 3-clause)\n");
   printf("- Atari800 mzpokeysnd POKEY emulator by Michael Borisov (GPLv2)\n");
   printf("- ASAP POKEY emulator by Piotr Fusik ported to C++ by laoo (GPLv2)\n");
@@ -556,20 +558,21 @@ int main(int argc, char** argv) {
       reqLocale+=".UTF-8";
     }
   }
+  strncpy(reqLocaleCopy,reqLocale.c_str(),63);
   if (reqLocale!="en_US.UTF-8") {
     const char* localeRet=NULL;
 #ifdef HAVE_SETLOCALE
-    if ((localeRet=setlocale(LC_CTYPE,reqLocale.c_str()))==NULL) {
+    if ((localeRet=setlocale(LC_CTYPE,reqLocaleCopy))==NULL) {
       logE("could not set locale (CTYPE)!");
       displayLocaleFailError=true;
     } else {
       logV("locale: %s",localeRet);
     }
-    if ((localeRet=setlocale(LC_MESSAGES,reqLocale.c_str()))==NULL) {
+    if ((localeRet=setlocale(LC_MESSAGES,reqLocaleCopy))==NULL) {
       logE("could not set locale (MESSAGES)!");
       displayLocaleFailError=true;
 #ifdef HAVE_MOMO
-      if (momo_setlocale(LC_MESSAGES,reqLocale.c_str())==NULL) {
+      if (momo_setlocale(LC_MESSAGES,reqLocaleCopy)==NULL) {
         logV("Momo: could not set locale!");
       }
 #endif
@@ -582,7 +585,7 @@ int main(int argc, char** argv) {
 #endif
     }
 #else
-    if ((localeRet=momo_setlocale(LC_MESSAGES,reqLocale.c_str()))==NULL) {
+    if ((localeRet=momo_setlocale(LC_MESSAGES,reqLocaleCopy))==NULL) {
       logV("Momo: could not set locale!");
     } else {
       logV("locale: %s",localeRet);
@@ -590,11 +593,12 @@ int main(int argc, char** argv) {
 #endif
 
     char exePath[4096];
-#ifdef ANDROID
     memset(exePath,0,4096);
-#else
+#ifndef ANDROID
     if (!getExePath(argv[0],exePath,4095)) memset(exePath,0,4096);
 #endif
+
+    memset(localeDir,0,4096);
 
     bool textDomainBound=false;
     for (int i=0; localeDirs[i]; i++) {
@@ -602,7 +606,13 @@ int main(int argc, char** argv) {
       strncpy(localeDir,localeDirs[i],4095);
 #else
       if (exePath[0]!=0 && localeDirs[i][0]!=DIR_SEPARATOR) {
-        strncpy(localeDir,exePath,4095);
+        // do you NOT understand what memset IS
+        char* i_s=exePath;
+        for (int i_i=0; i_i<4095; i_i++) {
+          localeDir[i_i]=*i_s;
+          if ((*i_s)==0) break;
+          i_s++;
+        }
         strncat(localeDir,DIR_SEPARATOR_STR,4095);
         strncat(localeDir,localeDirs[i],4095);
       } else {
@@ -654,7 +664,7 @@ int main(int argc, char** argv) {
             val=argv[i+1];
             i++;
           } else {
-            reportError(fmt::sprintf("incomplete param %s.",arg.c_str()));
+            reportError(fmt::sprintf(_("incomplete param %s."),arg.c_str()));
             return 1;
           }
         }
@@ -736,13 +746,13 @@ int main(int argc, char** argv) {
     logI("loading module...");
     FILE* f=ps_fopen(fileName.c_str(),"rb");
     if (f==NULL) {
-      reportError(fmt::sprintf("couldn't open file! (%s)",strerror(errno)));
+      reportError(fmt::sprintf(_("couldn't open file! (%s)"),strerror(errno)));
       e.everythingOK();
       finishLogFile();
       return 1;
     }
     if (fseek(f,0,SEEK_END)<0) {
-      reportError(fmt::sprintf("couldn't open file! (couldn't get file size: %s)",strerror(errno)));
+      reportError(fmt::sprintf(_("couldn't open file! (couldn't get file size: %s)"),strerror(errno)));
       e.everythingOK();
       fclose(f);
       finishLogFile();
@@ -750,7 +760,7 @@ int main(int argc, char** argv) {
     }
     ssize_t len=ftell(f);
     if (len==(SIZE_MAX>>1)) {
-      reportError(fmt::sprintf("couldn't open file! (couldn't get file length: %s)",strerror(errno)));
+      reportError(fmt::sprintf(_("couldn't open file! (couldn't get file length: %s)"),strerror(errno)));
       e.everythingOK();
       fclose(f);
       finishLogFile();
@@ -758,9 +768,9 @@ int main(int argc, char** argv) {
     }
     if (len<1) {
       if (len==0) {
-        reportError("that file is empty!");
+        reportError(_("that file is empty!"));
       } else {
-        reportError(fmt::sprintf("couldn't open file! (tell error: %s)",strerror(errno)));
+        reportError(fmt::sprintf(_("couldn't open file! (tell error: %s)"),strerror(errno)));
       }
       e.everythingOK();
       fclose(f);
@@ -769,7 +779,7 @@ int main(int argc, char** argv) {
     }
     unsigned char* file=new unsigned char[len];
     if (fseek(f,0,SEEK_SET)<0) {
-      reportError(fmt::sprintf("couldn't open file! (size error: %s)",strerror(errno)));
+      reportError(fmt::sprintf(_("couldn't open file! (size error: %s)"),strerror(errno)));
       e.everythingOK();
       fclose(f);
       delete[] file;
@@ -777,7 +787,7 @@ int main(int argc, char** argv) {
       return 1;
     }
     if (fread(file,1,(size_t)len,f)!=(size_t)len) {
-      reportError(fmt::sprintf("couldn't open file! (read error: %s)",strerror(errno)));
+      reportError(fmt::sprintf(_("couldn't open file! (read error: %s)"),strerror(errno)));
       e.everythingOK();
       fclose(f);
       delete[] file;
@@ -786,7 +796,7 @@ int main(int argc, char** argv) {
     }
     fclose(f);
     if (!e.load(file,(size_t)len,fileName.c_str())) {
-      reportError(fmt::sprintf("could not open file! (%s)",e.getLastError()));
+      reportError(fmt::sprintf(_("could not open file! (%s)"),e.getLastError()));
       e.everythingOK();
       finishLogFile();
       return 1;
@@ -800,7 +810,7 @@ int main(int argc, char** argv) {
 
   if (!e.init()) {
     if (consoleMode) {
-      reportError("could not initialize engine!");
+      reportError(_("could not initialize engine!"));
       finishLogFile();
       return 1;
     } else {
@@ -833,12 +843,12 @@ int main(int argc, char** argv) {
           fwrite(w->getFinalBuf(),1,w->size(),f);
           fclose(f);
         } else {
-          reportError(fmt::sprintf("could not open file! (%s)",e.getLastError()));
+          reportError(fmt::sprintf(_("could not open file! (%s)"),e.getLastError()));
         }
         w->finish();
         delete w;
       } else {
-        reportError("could not write command stream!");
+        reportError(_("could not write command stream!"));
       }
     }
     if (vgmOutName!="") {
@@ -849,12 +859,12 @@ int main(int argc, char** argv) {
           fwrite(w->getFinalBuf(),1,w->size(),f);
           fclose(f);
         } else {
-          reportError(fmt::sprintf("could not open file! (%s)",e.getLastError()));
+          reportError(fmt::sprintf(_("could not open file! (%s)"),e.getLastError()));
         }
         w->finish();
         delete w;
       } else {
-        reportError("could not write VGM!");
+        reportError(_("could not write VGM!"));
       }
     }
     if (outName!="") {
@@ -876,11 +886,11 @@ int main(int argc, char** argv) {
     }
     cli.bindEngine(&e);
     if (!cli.init()) {
-      reportError("error while starting CLI!");
+      reportError(_("error while starting CLI!"));
     } else {
       cliSuccess=true;
     }
-    logI("playing...");
+    logI(_("playing..."));
     e.play();
     if (cliSuccess) {
       cli.loop();
@@ -921,8 +931,8 @@ int main(int argc, char** argv) {
   }
 
   if (displayEngineFailError) {
-    logE("displaying engine fail error.");
-    g.showError("error while initializing audio!");
+    logE(_("displaying engine fail error."));
+    g.showError(_("error while initializing audio!"));
   }
 
   if (displayLocaleFailError) {
