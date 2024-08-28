@@ -67,6 +67,7 @@ enum DivDispatchCmds {
   DIV_CMD_HINT_ARPEGGIO, // (note1, note2)
   DIV_CMD_HINT_VOLUME, // (vol)
   DIV_CMD_HINT_VOL_SLIDE, // (amount, oneTick)
+  DIV_CMD_HINT_VOL_SLIDE_TARGET, // (amount, target)
   DIV_CMD_HINT_PORTA, // (target, speed)
   DIV_CMD_HINT_LEGATO, // (note)
 
@@ -262,6 +263,10 @@ enum DivDispatchCmds {
 
   DIV_CMD_BIFURCATOR_STATE_LOAD,
   DIV_CMD_BIFURCATOR_PARAMETER,
+
+  DIV_CMD_FDS_MOD_AUTO,
+
+  DIV_CMD_FM_OPMASK, // (mask)
 
   DIV_CMD_MAX
 };
