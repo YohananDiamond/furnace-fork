@@ -388,6 +388,7 @@ void FurnaceGUI::decodeMMLStr(String& source, int* macro, unsigned char& macroLe
     setBit30=false;
     macroLen++;
     buf=0;
+    MARK_MODIFIED;
   }
 }
 
@@ -423,6 +424,21 @@ void FurnaceGUI::decodeMMLStr(String& source, int* macro, unsigned char& macroLe
       } \
     } \
   }
+
+bool FurnaceGUI::isCtrlWheelModifierHeld() const {
+  switch (settings.ctrlWheelModifier) {
+    case 0:
+      return ImGui::IsKeyDown(ImGuiMod_Ctrl) || ImGui::IsKeyDown(ImGuiMod_Super);
+    case 1:
+      return ImGui::IsKeyDown(ImGuiMod_Ctrl);
+    case 2:
+      return ImGui::IsKeyDown(ImGuiMod_Super);
+    case 3:
+      return ImGui::IsKeyDown(ImGuiMod_Alt);
+    default:
+      return false;
+  }
+}
 
 bool FurnaceGUI::CWSliderScalar(const char* label, ImGuiDataType data_type, void* p_data, const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags) {
   flags^=ImGuiSliderFlags_AlwaysClamp;
@@ -993,11 +1009,6 @@ Pos=339,177\n\
 Size=601,400\n\
 Collapsed=0\n\
 \n\
-[Window][Rendering...]\n\
-Pos=585,342\n\
-Size=600,100\n\
-Collapsed=0\n\
-\n\
 [Window][Export VGM##FileDialog]\n\
 Pos=340,177\n\
 Size=600,400\n\
@@ -1216,6 +1227,7 @@ void FurnaceGUI::play(int row) {
   memset(chanOscBright,0,DIV_MAX_CHANS*sizeof(float));
   e->walkSong(loopOrder,loopRow,loopEnd);
   memset(lastIns,-1,sizeof(int)*DIV_MAX_CHANS);
+  if (followPattern) makeCursorUndo();
   if (!followPattern) e->setOrder(curOrder);
   if (row>0) {
     if (!e->playToRow(row)) {
@@ -1486,13 +1498,24 @@ void FurnaceGUI::keyDown(SDL_Event& ev) {
         case SDLK_LGUI: case SDLK_RGUI:
         case SDLK_LSHIFT: case SDLK_RSHIFT:
           bindSetPending=false;
-          actionKeys[bindSetTarget]=(mapped&(~FURK_MASK))|0xffffff;
+          actionKeys[bindSetTarget][bindSetTargetIdx]=(mapped&(~FURK_MASK))|0xffffff;
           break;
         default:
-          actionKeys[bindSetTarget]=mapped;
+          actionKeys[bindSetTarget][bindSetTargetIdx]=mapped;
+
+          // de-dupe with an n^2 algorithm that will never ever be a problem (...but for real though)
+          for (size_t i=0; i<actionKeys[bindSetTarget].size(); i++) {
+            for (size_t j=i+1; j<actionKeys[bindSetTarget].size(); j++) {
+              if (actionKeys[bindSetTarget][i]==actionKeys[bindSetTarget][j]) {
+                actionKeys[bindSetTarget].erase(actionKeys[bindSetTarget].begin()+j);
+              }
+            }
+          }
+
           bindSetActive=false;
           bindSetPending=false;
           bindSetTarget=0;
+          bindSetTargetIdx=0;
           bindSetPrevValue=0;
           parseKeybinds();
           break;
@@ -2448,6 +2471,20 @@ int FurnaceGUI::load(String path) {
     // warn the user
     showWarning(_("you have loaded a backup!\nif you need to, please save it somewhere.\n\nDO NOT RELY ON THE BACKUP SYSTEM FOR AUTO-SAVE!\nFurnace will not save backups of backups."),GUI_WARN_GENERIC);
   }
+
+  // if this is a PC module import, warn the user on the first import.
+  if (!tutorial.importedMOD && e->song.version==DIV_VERSION_MOD) {
+    showWarning(_("you have imported a ProTracker/SoundTracker/PC module!\nkeep the following in mind:\n\n- Furnace is not a replacement for your MOD player\n- import is not perfect. your song may sound different:\n  - E6x pattern loop is not supported\n\nhave fun!"),GUI_WARN_IMPORT);
+  }
+  if (!tutorial.importedS3M && e->song.version==DIV_VERSION_S3M) {
+    showWarning(_("you have imported a Scream Tracker 3 module!\nkeep the following in mind:\n\n- Furnace is not a replacement for your S3M player\n- import is not perfect. your song may sound different:\n  - OPL instruments may be detuned\n\nhave fun!"),GUI_WARN_IMPORT);
+  }
+  if (!tutorial.importedXM && e->song.version==DIV_VERSION_XM) {
+    showWarning(_("you have imported a FastTracker II module!\nkeep the following in mind:\n\n- Furnace is not a replacement for your XM player\n- import is not perfect. your song may sound different:\n  - envelopes have been converted to macros\n  - global volume changes are not supported\n\nhave fun!"),GUI_WARN_IMPORT);
+  }
+  if (!tutorial.importedIT && e->song.version==DIV_VERSION_IT) {
+    showWarning(_("you have imported an Impulse Tracker module!\nkeep the following in mind:\n\n- Furnace is not a replacement for your IT player\n- import is not perfect. your song may sound different:\n  - envelopes have been converted to macros\n  - global volume changes are not supported\n  - channel volume changes are not supported\n  - New Note Actions (NNA) are not supported\n\nhave fun!"),GUI_WARN_IMPORT);
+  }
   return 0;
 }
 
@@ -2816,24 +2853,6 @@ void FurnaceGUI::processDrags(int dragX, int dragY) {
   } \
   if (lowerCase.size()<strlen(x) || lowerCase.rfind(x)!=lowerCase.size()-strlen(x)) { \
     fileName+=x; \
-  }
-
-#define checkExtensionDual(x,y,fallback) \
-  String lowerCase=fileName; \
-  for (char& i: lowerCase) { \
-    if (i>='A' && i<='Z') i+='a'-'A'; \
-  } \
-  if (lowerCase.size()<4 || (lowerCase.rfind(x)!=lowerCase.size()-4 && lowerCase.rfind(y)!=lowerCase.size()-4)) { \
-    fileName+=fallback; \
-  }
-
-#define checkExtensionTriple(x,y,z,fallback) \
-  String lowerCase=fileName; \
-  for (char& i: lowerCase) { \
-    if (i>='A' && i<='Z') i+='a'-'A'; \
-  } \
-  if (lowerCase.size()<4 || (lowerCase.rfind(x)!=lowerCase.size()-4 && lowerCase.rfind(y)!=lowerCase.size()-4 && lowerCase.rfind(z)!=lowerCase.size()-4)) { \
-    fileName+=fallback; \
   }
 
 #define drawOpMask(m) \
@@ -3516,8 +3535,12 @@ void FurnaceGUI::pointDown(int x, int y, int button) {
   if (bindSetActive) {
     bindSetActive=false;
     bindSetPending=false;
-    actionKeys[bindSetTarget]=bindSetPrevValue;
+    actionKeys[bindSetTarget][bindSetTargetIdx]=bindSetPrevValue;
+    if (bindSetTargetIdx==(int)actionKeys[bindSetTarget].size()-1 && bindSetPrevValue<=0) {
+      actionKeys[bindSetTarget].pop_back();
+    }
     bindSetTarget=0;
+    bindSetTargetIdx=0;
     bindSetPrevValue=0;
   }
   if (introPos<11.0 && !shortIntro) {
@@ -5105,7 +5128,13 @@ bool FurnaceGUI::loop() {
         } else {
           fileName=fileDialog->getFileName()[0];
         }
+#ifdef FLATPAK_WORKAROUNDS
+        // https://github.com/tildearrow/furnace/issues/2096
+        // Flatpak Portals mangling our path hinders us from adding extension
+        if (fileName!="" && !settings.sysFileDialog) {
+#else
         if (fileName!="") {
+#endif
           if (curFileDialog==GUI_FILE_SAVE) {
             checkExtension(".fur");
           }
@@ -5859,7 +5888,8 @@ bool FurnaceGUI::loop() {
     MEASURE_BEGIN(popup);
 
     centerNextWindow(_("Rendering..."),canvasW,canvasH);
-    if (ImGui::BeginPopupModal(_("Rendering..."),NULL,ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoMove)) {
+    // ImGui::SetNextWindowSize(ImVec2(0.0f,0.0f));
+    if (ImGui::BeginPopupModal(_("Rendering..."),NULL,ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings)) {
       // WHAT the HELL?!
       WAKE_UP;
       if (audioExportOptions.mode!=DIV_EXPORT_MODE_MANY_CHAN) {
@@ -5875,35 +5905,32 @@ bool FurnaceGUI::loop() {
       int curFile=0;
       int* curFileLambda=&curFile;
       if (e->isExporting()) {
-        e->lockEngine([this, progressLambda, curPosInRowsLambda, curFileLambda,
-                       loopsLeftLambda, totalLoopsLambda] () {
-                      int curRow=0; int curOrder=0;
-                      e->getCurSongPos(curRow, curOrder); *curFileLambda=0;
-                      e->getCurFileIndex(*curFileLambda);
-                      *curPosInRowsLambda=curRow; for (int i=0; i<curOrder;
-                                                         i++) {
-                      *curPosInRowsLambda+=songOrdersLengths[i];}
-
-                      if (!songHasSongEndCommand) {
-                      e->getLoopsLeft(*loopsLeftLambda); e->getTotalLoops(*totalLoopsLambda); if ((*totalLoopsLambda)!=(*loopsLeftLambda))        //we are going 2nd, 3rd, etc. time through the song
-                      {
-                      *curPosInRowsLambda-=(songLength-songLoopedSectionLength);        //a hack so progress bar does not jump?
-                      }
-                      if (e->getIsFadingOut())        //we are in fadeout??? why it works like that bruh
-                      {
-                      // LIVE WITH IT damn it
-                      *curPosInRowsLambda-=(songLength-songLoopedSectionLength);        //a hack so progress bar does not jump?
-                      }
-                      }
-                      // this horrible indentation courtesy of `indent`
-                      *progressLambda=(float) ((*curPosInRowsLambda) +                                                 ((*totalLoopsLambda)-                                                 (*loopsLeftLambda)) *                                                 songLength +                                                 lengthOfOneFile *                                                 (*curFileLambda))                      / (float) totalLength;});
+        e->lockEngine(
+          [this, progressLambda, curPosInRowsLambda, curFileLambda, loopsLeftLambda, totalLoopsLambda] () {
+            int curRow=0; int curOrder=0;
+            e->getCurSongPos(curRow, curOrder);
+            *curFileLambda=0;
+            e->getCurFileIndex(*curFileLambda);
+            *curPosInRowsLambda=curRow;
+            for (int i=0; i<curOrder; i++) *curPosInRowsLambda+=songOrdersLengths[i];
+            if (!songHasSongEndCommand) {
+              e->getLoopsLeft(*loopsLeftLambda);
+              e->getTotalLoops(*totalLoopsLambda);
+              if ((*totalLoopsLambda)!=(*loopsLeftLambda)) { // we are going 2nd, 3rd, etc. time through the song
+                *curPosInRowsLambda-=(songLength-songLoopedSectionLength); // a hack so progress bar does not jump?
+              }
+              if (e->getIsFadingOut()) { // we are in fadeout??? why it works like that bruh
+                // LIVE WITH IT damn it
+                *curPosInRowsLambda-=(songLength-songLoopedSectionLength); // a hack so progress bar does not jump?
+              }
+            }
+            *progressLambda=(float)((*curPosInRowsLambda)+((*totalLoopsLambda)-(*loopsLeftLambda))*songLength+lengthOfOneFile*(*curFileLambda))/(float)totalLength;
+          }
+        );
       }
 
       ImGui::Text(_("Row %d of %d"),curPosInRows+((totalLoops)-(loopsLeft))*songLength,lengthOfOneFile);
-
-      if (audioExportOptions.mode==DIV_EXPORT_MODE_MANY_CHAN) {
-        ImGui::Text(_("Channel %d of %d"),curFile+1,totalFiles);
-      }
+      if (audioExportOptions.mode==DIV_EXPORT_MODE_MANY_CHAN) ImGui::Text(_("Channel %d of %d"),curFile+1,totalFiles);
 
       ImGui::ProgressBar(curProgress,ImVec2(320.0f*dpiScale,0),fmt::sprintf("%.2f%%",curProgress*100.0f).c_str());
 
@@ -6451,6 +6478,26 @@ bool FurnaceGUI::loop() {
           popDestColor();
           ImGui::SameLine();
           if (ImGui::Button(_("No"))) {
+            ImGui::CloseCurrentPopup();
+          }
+          break;
+        case GUI_WARN_IMPORT:
+          if (ImGui::Button(_("Got it"))) {
+            switch (e->song.version) {
+              case DIV_VERSION_MOD:
+                tutorial.importedMOD=true;
+                break;
+              case DIV_VERSION_S3M:
+                tutorial.importedS3M=true;
+                break;
+              case DIV_VERSION_XM:
+                tutorial.importedXM=true;
+                break;
+              case DIV_VERSION_IT:
+                tutorial.importedIT=true;
+                break;
+            }
+            commitTutorial();
             ImGui::CloseCurrentPopup();
           }
           break;
@@ -8629,6 +8676,7 @@ FurnaceGUI::FurnaceGUI():
   waveDragMax(0),
   waveDragActive(false),
   bindSetTarget(0),
+  bindSetTargetIdx(0),
   bindSetPrevValue(0),
   bindSetActive(false),
   bindSetPending(false),
@@ -8855,8 +8903,6 @@ FurnaceGUI::FurnaceGUI():
   opMaskTransposeValue.vol=true;
   opMaskTransposeValue.effect=false;
   opMaskTransposeValue.effectVal=true;
-
-  memset(actionKeys,0,GUI_ACTION_MAX*sizeof(int));
 
   memset(patChanX,0,sizeof(float)*(DIV_MAX_CHANS+1));
   memset(patChanSlideY,0,sizeof(float)*(DIV_MAX_CHANS+1));

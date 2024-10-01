@@ -680,10 +680,15 @@ void FurnaceGUI::doAction(int what) {
       latchTarget=0;
       latchNibble=false;
       break;
-    case GUI_ACTION_PAT_ABSORB_INSTRUMENT: {
+    case GUI_ACTION_PAT_ABSORB_INSTRUMENT:
       doAbsorbInstrument();
       break;
-    }
+    case GUI_ACTION_PAT_CURSOR_UNDO:
+      doCursorUndo();
+      break;
+    case GUI_ACTION_PAT_CURSOR_REDO:
+      doCursorRedo();
+      break;
 
     case GUI_ACTION_INS_LIST_ADD:
       if (settings.insTypeMenu) {
@@ -1680,11 +1685,17 @@ void FurnaceGUI::doAction(int what) {
     case GUI_ACTION_ORDERS_UP:
       if (curOrder>0) {
         setOrder(curOrder-1);
+        if (orderEditMode!=0) {
+          curNibble=false;
+        }
       }
       break;
     case GUI_ACTION_ORDERS_DOWN:
       if (curOrder<e->curSubSong->ordersLen-1) {
         setOrder(curOrder+1);
+        if (orderEditMode!=0) {
+          curNibble=false;
+        }
       }
       break;
     case GUI_ACTION_ORDERS_LEFT: {
@@ -1697,6 +1708,9 @@ void FurnaceGUI::doAction(int what) {
           break;
         }
       } while (!e->curSubSong->chanShow[orderCursor]);
+      if (orderEditMode!=0) {
+        curNibble=false;
+      }
       break;
     }
     case GUI_ACTION_ORDERS_RIGHT: {
@@ -1709,6 +1723,9 @@ void FurnaceGUI::doAction(int what) {
           break;
         }
       } while (!e->curSubSong->chanShow[orderCursor]);
+      if (orderEditMode!=0) {
+        curNibble=false;
+      }
       break;
     }
     case GUI_ACTION_ORDERS_INCREASE: {
@@ -1716,12 +1733,18 @@ void FurnaceGUI::doAction(int what) {
       if (e->curOrders->ord[orderCursor][curOrder]<0xff) {
         e->curOrders->ord[orderCursor][curOrder]++;
       }
+      if (orderEditMode!=0) {
+        curNibble=false;
+      }
       break;
     }
     case GUI_ACTION_ORDERS_DECREASE: {
       if (orderCursor<0 || orderCursor>=e->getTotalChannelCount()) break;
       if (e->curOrders->ord[orderCursor][curOrder]>0) {
         e->curOrders->ord[orderCursor][curOrder]--;
+      }
+      if (orderEditMode!=0) {
+        curNibble=false;
       }
       break;
     }
