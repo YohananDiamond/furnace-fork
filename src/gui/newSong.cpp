@@ -65,6 +65,7 @@ void FurnaceGUI::drawSysDefs(std::vector<FurnaceGUISysDef>& category, bool& acce
     if (isHovered && !alreadyHover) {
       alreadyHover=true;
       if (ImGui::BeginTooltip()) {
+        ImGui::Dummy(ImVec2(400.0f*dpiScale,0.0f));
         std::map<DivSystem,int> chipCounts;
         std::vector<DivSystem> chips;
         for (FurnaceGUISysDefChip chip: i.orig) {
@@ -81,8 +82,9 @@ void FurnaceGUI::drawSysDefs(std::vector<FurnaceGUISysDef>& category, bool& acce
           ImGui::PushTextWrapPos(MIN(scrW*dpiScale,400.0f*dpiScale));
           ImGui::Text("%s (x%d): ",sysDef->name,chipCounts[chip]);
           ImGui::Text("%s",sysDef->description);
-          if (settings.sysTooltipChanInfoStyle&1) drawSystemChannelInfoText(sysDef);
-          if (settings.sysTooltipChanInfoStyle&2) drawSystemChannelInfo(sysDef);
+          ImGui::Separator();
+          drawSystemChannelInfoText(sysDef);
+          drawSystemChannelInfo(sysDef);
           ImGui::PopTextWrapPos();
           if (chipIndex+1<chips.size()) {
             ImGui::Separator();
