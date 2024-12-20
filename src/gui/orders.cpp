@@ -87,6 +87,41 @@ void FurnaceGUI::drawMobileOrderSel() {
       orderScrollLocked=true;
       orderScrollTolerance=true;
     }
+
+    // time
+    if (e->isPlaying() && settings.playbackTime) {
+      int totalTicks=e->getTotalTicks();
+      int totalSeconds=e->getTotalSeconds();
+      String info="";
+
+      if (totalSeconds==0x7fffffff) {
+        info="∞";
+      } else {
+        if (totalSeconds>=86400) {
+          int totalDays=totalSeconds/86400;
+          int totalYears=totalDays/365;
+          totalDays%=365;
+          int totalMonths=totalDays/30;
+          totalDays%=30;
+
+          info+=fmt::sprintf("%dy",totalYears);
+          info+=fmt::sprintf("%dm",totalMonths);
+          info+=fmt::sprintf("%dd",totalDays);
+        }
+
+        if (totalSeconds>=3600) {
+          info+=fmt::sprintf("%.2d:",(totalSeconds/3600)%24);
+        }
+
+        info+=fmt::sprintf("%.2d:%.2d.%.2d",(totalSeconds/60)%60,totalSeconds%60,totalTicks/10000);
+      }
+
+      ImVec2 textSize=ImGui::CalcTextSize(info.c_str());
+
+      dl->AddRectFilled(ImVec2(11.0f*dpiScale,(size.y*0.5)-(5.0f*dpiScale)),ImVec2((21.0f*dpiScale)+textSize.x,(size.y*0.5)+textSize.y+(5.0f*dpiScale)),ImGui::GetColorU32(ImGuiCol_WindowBg));
+      dl->AddRect(ImVec2(11.0f*dpiScale,(size.y*0.5)-(5.0f*dpiScale)),ImVec2((21.0f*dpiScale)+textSize.x,(size.y*0.5)+textSize.y+(5.0f*dpiScale)),ImGui::GetColorU32(ImGuiCol_Border),0,0,dpiScale);
+      dl->AddText(ImVec2(16.0f*dpiScale,(size.y)*0.5),ImGui::GetColorU32(ImGuiCol_Text),info.c_str());
+    }
   }
   ImGui::End();
 }
@@ -265,7 +300,7 @@ void FurnaceGUI::drawOrders() {
       bool tooSmall=((displayChans+1)>((ImGui::GetContentRegionAvail().x)/(ImGui::CalcTextSize("AA").x+2.0*ImGui::GetStyle().ItemInnerSpacing.x)));
       float yHeight=ImGui::GetContentRegionAvail().y;
       float lineHeight=(ImGui::GetTextLineHeight()+4*dpiScale);
-      if (e->isPlaying()) {
+      if (e->isPlaying() || haveHitBounds) {
         if (followOrders) {
           float nextOrdScroll=(playOrder+1)*lineHeight-((yHeight-(tooSmall?ImGui::GetStyle().ScrollbarSize:0.0f))/2.0f);
           if (nextOrdScroll<0.0f) nextOrdScroll=0.0f;
